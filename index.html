@@ -46,7 +46,7 @@
         // ตั้งค่า URL ของ Google Apps Script ที่นี่ !!
         // ==========================================
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbzrfdDPATU7Mgq1go7O8aTlNAqQHYV-MFuj7OoWugLL2azsoWs8qo69KpojBpkCH21q_Q/exec'; 
-        const TOTAL_STAMPS = 11;
+        const TOTAL_STAMPS = 10;
         const LIFF_ID = '2009175418-UODHvYrB';
 
         const App = () => {
@@ -85,7 +85,7 @@
             const fetchUserData = async (user) => {
                 if (!GAS_URL || GAS_URL === 'YOUR_GOOGLE_APP_SCRIPT_WEB_APP_URL_HERE') {
                     setLoading(false);
-                    showMessage('กรุณาใส่ GAS URL ในโค้ด', 'error');
+                    showMessage('กรุณาใส่ GAS URL CODE', 'error');
                     return;
                 }
                 try {
