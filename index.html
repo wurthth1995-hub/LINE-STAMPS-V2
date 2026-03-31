@@ -46,7 +46,7 @@
         // ตั้งค่า URL ของ Google Apps Script ที่นี่ !!
         // ==========================================
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbzrfdDPATU7Mgq1go7O8aTlNAqQHYV-MFuj7OoWugLL2azsoWs8qo69KpojBpkCH21q_Q/exec'; 
-        const TOTAL_STAMPS = 16;
+        const TOTAL_STAMPS = 14;
         const LIFF_ID = '2009175418-UODHvYrB';
 
         const App = () => {
@@ -76,9 +76,9 @@
                     // Mock data for browser testing outside LINE
                     const mockProfile = { userId: 'mock123', displayName: 'Mock User', pictureUrl: 'https://ui-avatars.com/api/?name=User&background=CC0000&color=fff' };
                     setProfile(mockProfile);
-                    setPoints(5); // Mock points
+                    setPoints(0); // Mock points
                     setLoading(false);
-                    showMessage('กำลังรันในโหมดจำลอง (ไม่ได้อยู่ใน LINE)', 'warning');
+                    showMessage('กำลังรันในโหมดจำลอง กรุุณาเปิดใช้งานใน LINE เท่านั้น (ไม่ได้อยู่ใน LINE)', 'warning');
                 }
             };
 
