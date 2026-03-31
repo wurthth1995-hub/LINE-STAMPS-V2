@@ -78,22 +78,38 @@
                 }
             };
 
-            const fetchUserData = async (user) => {
-                if (!GAS_URL || GAS_URL === 'YOUR_GOOGLE_APP_SCRIPT_WEB_APP_URL_HERE') {
-                    setLoading(false);
-                    showMessage('กรุณาใส่ GAS URL CODE', 'error');
-                    return;
+            // ฟังก์ชัน Fetch ที่มีความทนทานสูงขึ้น (Retry Logic)
+            const fetchWithRetry = async (url, options = {}, retries = 2) => {
+                for (let i = 0; i <= retries; i++) {
+                    try {
+                        const res = await fetch(url, options);
+                        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                        return await res.json();
+                    } catch (error) {
+                        if (i === retries) throw error; // ถ้าลองครบโควต้าแล้วยังพัง ให้โยน Error ออกไป
+                        console.warn(`Fetch failed, retrying... (${i + 1}/${retries})`);
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // รอ 1 วินาทีก่อนลองใหม่
+                    }
                 }
+            };
+
+            // นำมาใช้ใน fetchUserData
+            const fetchUserData = async (user) => {
+                if (!GAS_URL || GAS_URL === 'YOUR_GOOGLE_APP_SCRIPT_WEB_APP_URL_HERE') return;
+
                 try {
                     setLoading(true);
-                    const response = await fetch(`${GAS_URL}?action=getUser&userId=${user.userId}&displayName=${encodeURIComponent(user.displayName)}`);
-                    const data = await response.json();
-                    if (data.status === 'success') {
+                    // เปลี่ยนมาใช้ fetchWithRetry
+                    const data = await fetchWithRetry(`${GAS_URL}?action=getUser&userId=${user.userId}&displayName=${encodeURIComponent(user.displayName)}`);
+
+                    if (data && data.status === 'success') {
                         setPoints(parseInt(data.points) || 0);
+                    } else {
+                        throw new Error(data?.message || 'Invalid response format');
                     }
                 } catch (error) {
                     console.error('Error fetching user:', error);
-                    showMessage('ไม่สามารถโหลดข้อมูลได้', 'error');
+                    showMessage('เซิร์ฟเวอร์ตอบสนองช้า กรุณาลองใหม่อีกครั้ง', 'error');
                 } finally {
                     setLoading(false);
                 }
