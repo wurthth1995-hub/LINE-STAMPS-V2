@@ -73,12 +73,8 @@
                     }
                 } catch (err) {
                     console.error('LIFF Init Error', err);
-                    // Mock data for browser testing outside LINE
-                    const mockProfile = { userId: 'mock123', displayName: 'Mock User', pictureUrl: 'https://ui-avatars.com/api/?name=User&background=CC0000&color=fff' };
-                    setProfile(mockProfile);
-                    setPoints(5); // Mock points
                     setLoading(false);
-                    showMessage('กำลังรันในโหมดจำลอง (ไม่ได้อยู่ใน LINE)', 'warning');
+                    showMessage('การเชื่อมต่อกับ LINE ขัดข้อง กรุณากดปิดแล้วเปิดใหม่อีกครั้ง', 'error');
                 }
             };
 
