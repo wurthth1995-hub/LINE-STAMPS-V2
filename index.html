@@ -190,6 +190,11 @@
             };
 
             const animateNewStamp = () => {
+                // สั่งให้มือถือสั่น 100 มิลลิวินาที (ถ้าอุปกรณ์รองรับ)
+                if (navigator.vibrate) {
+                    navigator.vibrate(100); 
+                }
+                
                 setPoints(prev => {
                     const newPoints = Math.min(prev + 1, TOTAL_STAMPS);
                     setRecentStampIndex(newPoints - 1);
