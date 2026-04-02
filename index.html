@@ -57,32 +57,56 @@
             const [message, setMessage] = React.useState({ show: false, text: '', type: '' });
             const [recentStampIndex, setRecentStampIndex] = React.useState(-1);
 
+            const initializeLiff = async () => {
+                try {
+                    // 1. เพิ่ม withLoginOnExternalBrowser ช่วยให้ระบบ Login เสถียรขึ้นแม้มีปัญหา Webview
+                    await liff.init({ 
+                        liffId: LIFF_ID,
+                        withLoginOnExternalBrowser: true 
+                    });
+                    
+                    // 2. เช็คสถานะการ Login
+                    if (liff.isLoggedIn()) {
+                        try {
+                            const userProfile = await liff.getProfile();
+                            if (userProfile && userProfile.userId) {
+                                setProfile(userProfile);
+                                fetchUserData(userProfile);
+                            } else {
+                                throw new Error('Profile data is incomplete');
+                            }
+                        } catch (profileErr) {
+                            // กรณีดึง Profile ไม่ได้ (อาจจะเพราะเรื่อง Permission)
+                            console.error('Profile Fetch Error:', profileErr);
+                            setLoading(false);
+                            showMessage('ไม่สามารถเข้าถึงโปรไฟล์ได้ กรุณาตรวจสอบการให้สิทธิ์', 'error');
+                        }
+                    } else {
+                        // กรณีเปิดใน LINE แล้วสถานะหลุด ให้จับ Login ใหม่
+                        liff.login();
+                    }
+                } catch (err) {
+                    console.error('LIFF Init Error:', err);
+                    setLoading(false);
+                    
+                    // 3. ดักจับ Error Message เพื่อให้หน้าบ้านโชว์สาเหตุที่แท้จริง
+                    let errorMessage = 'การเชื่อมต่อกับ LINE ขัดข้อง กรุณาปิดแล้วเปิดใหม่';
+                    
+                    if (err.code === '4003') { // 4003 คือ Error Code ของการไม่ให้สิทธิ์
+                        errorMessage = 'กรุณากด "อนุญาต" เพื่อเข้าใช้งานระบบ';
+                    } else if (err.message) {
+                        // โชว์ Error Message สั้นๆ ให้พอรู้สาเหตุ
+                        errorMessage = `ข้อผิดพลาด: ${err.message.substring(0, 40)}...`;
+                    }
+                    
+                    showMessage(errorMessage, 'error');
+                }
+            };
+
             React.useEffect(() => {
                 initializeLiff();
             }, []);
 
-            const initializeLiff = async () => {
-                try {
-                    await liff.init({ liffId: LIFF_ID });
-                    if (liff.isLoggedIn()) {
-                        const userProfile = await liff.getProfile();
-                        // อุดช่องโหว่: ป้องกันกรณีได้ Profile แต่ไม่มี userId
-                        if (userProfile && userProfile.userId) {
-                            setProfile(userProfile);
-                            fetchUserData(userProfile);
-                        } else {
-                            setLoading(false);
-                            showMessage('ไม่สามารถดึงข้อมูล LINE ID ได้ กรุณารีเฟรช', 'error');
-                        }
-                    } else {
-                        liff.login();
-                    }
-                } catch (err) {
-                    console.error('LIFF Init Error', err);
-                    setLoading(false);
-                    showMessage('การเชื่อมต่อกับ LINE ขัดข้อง กรุณากดปิดแล้วเปิดใหม่อีกครั้ง', 'error');
-                }
-            };
 
             // ฟังก์ชัน Fetch ที่มีความทนทานสูงขึ้น (Retry Logic + Redirect Follow)
             const fetchWithRetry = async (url, options = {}, retries = 2) => {
