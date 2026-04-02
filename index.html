@@ -190,11 +190,25 @@
             };
 
             const animateNewStamp = () => {
-                // สั่งให้มือถือสั่น 100 มิลลิวินาที (ถ้าอุปกรณ์รองรับ)
+                // 1. ลองสั่งสั่น (ทำงานเฉพาะบน Android)
                 if (navigator.vibrate) {
-                    navigator.vibrate(100); 
+                    // ใช้ try-catch ครอบไว้อีกชั้นเพื่อความปลอดภัยสูงสุด
+                    try {
+                        navigator.vibrate(100); 
+                    } catch (e) {
+                        console.warn("Vibration API error:", e);
+                    }
                 }
                 
+                // 2. เล่นเสียง Success (ทำงานได้ทั้ง iOS และ Android)
+                if (successSound.current) {
+                    successSound.current.currentTime = 0; // รีเซ็ตเสียงกลับไปจุดเริ่มต้น (เผื่อกดรัวๆ)
+                    successSound.current.play().catch(e => {
+                        console.warn("Autoplay prevented by browser:", e);
+                    });
+                }
+                
+                // 3. เพิ่มแต้มและเล่นอนิเมชัน
                 setPoints(prev => {
                     const newPoints = Math.min(prev + 1, TOTAL_STAMPS);
                     setRecentStampIndex(newPoints - 1);
