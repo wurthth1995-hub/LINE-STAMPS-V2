@@ -45,7 +45,7 @@
         // ==========================================
         // ตั้งค่า URL ของ Google Apps Script ที่นี่ !!
         // ==========================================
-        const GAS_URL = 'https://script.google.com/macros/s/AKfycbzrfdDPATU7Mgq1go7O8aTlNAqQHYV-MFuj7OoWugLL2azsoWs8qo69KpojBpkCH21q_Q/exec'; 
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbyDD1B8zPRswF2orSAMPsglbUErWFzvxQ-hmOpG6ukgVcltbZnhej11_x5d3JwnkDNOzA/exec'; 
         const TOTAL_STAMPS = 14;
         const LIFF_ID = '2009175418-UODHvYrB';
 
@@ -66,8 +66,14 @@
                     await liff.init({ liffId: LIFF_ID });
                     if (liff.isLoggedIn()) {
                         const userProfile = await liff.getProfile();
-                        setProfile(userProfile);
-                        fetchUserData(userProfile);
+                        // อุดช่องโหว่: ป้องกันกรณีได้ Profile แต่ไม่มี userId
+                        if (userProfile && userProfile.userId) {
+                            setProfile(userProfile);
+                            fetchUserData(userProfile);
+                        } else {
+                            setLoading(false);
+                            showMessage('ไม่สามารถดึงข้อมูล LINE ID ได้ กรุณารีเฟรช', 'error');
+                        }
                     } else {
                         liff.login();
                     }
@@ -78,32 +84,45 @@
                 }
             };
 
-            // ฟังก์ชัน Fetch ที่มีความทนทานสูงขึ้น (Retry Logic)
+            // ฟังก์ชัน Fetch ที่มีความทนทานสูงขึ้น (Retry Logic + Redirect Follow)
             const fetchWithRetry = async (url, options = {}, retries = 2) => {
+                const fetchOptions = { ...options, redirect: 'follow' };
+                
                 for (let i = 0; i <= retries; i++) {
                     try {
-                        const res = await fetch(url, options);
+                        const res = await fetch(url, fetchOptions);
                         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-                        return await res.json();
+                        
+                        // ป้องกันกรณี GAS ล่มแล้วคืนค่าเป็นหน้าเว็บ HTML Error
+                        const contentType = res.headers.get("content-type");
+                        if (contentType && contentType.indexOf("application/json") !== -1) {
+                            return await res.json();
+                        } else {
+                            throw new Error("Response is not JSON.");
+                        }
                     } catch (error) {
-                        if (i === retries) throw error; // ถ้าลองครบโควต้าแล้วยังพัง ให้โยน Error ออกไป
+                        if (i === retries) throw error; 
                         console.warn(`Fetch failed, retrying... (${i + 1}/${retries})`);
-                        await new Promise(resolve => setTimeout(resolve, 1000)); // รอ 1 วินาทีก่อนลองใหม่
+                        await new Promise(resolve => setTimeout(resolve, 1000)); 
                     }
                 }
             };
 
-            // นำมาใช้ใน fetchUserData
             const fetchUserData = async (user) => {
                 if (!GAS_URL || GAS_URL === 'YOUR_GOOGLE_APP_SCRIPT_WEB_APP_URL_HERE') return;
+                if (!user || !user.userId) return;
 
                 try {
                     setLoading(true);
-                    // เปลี่ยนมาใช้ fetchWithRetry
-                    const data = await fetchWithRetry(`${GAS_URL}?action=getUser&userId=${user.userId}&displayName=${encodeURIComponent(user.displayName)}`);
+                    // Cache Buster: แนบ Timestamp เพื่อหลีกเลี่ยงอาการ LINE Browser จำข้อมูลเก่า (แต้ม 0)
+                    const cacheBuster = new Date().getTime();
+                    const url = `${GAS_URL}?action=getUser&userId=${user.userId}&displayName=${encodeURIComponent(user.displayName)}&t=${cacheBuster}`;
+                    
+                    const data = await fetchWithRetry(url);
 
                     if (data && data.status === 'success') {
-                        setPoints(parseInt(data.points) || 0);
+                        const userPoints = parseInt(data.points, 10);
+                        setPoints(isNaN(userPoints) ? 0 : userPoints);
                     } else {
                         throw new Error(data?.message || 'Invalid response format');
                     }
@@ -126,18 +145,19 @@
 
                 try {
                     setLoading(true);
-                    const response = await fetch(`${GAS_URL}?action=addPoint&userId=${profile.userId}&pin=${tokenString}`, {
-                        method: 'GET', // Using GET for simpler CORS handling in App Script
-                    });
-                    const data = await response.json();
+                    const cacheBuster = new Date().getTime();
+                    const url = `${GAS_URL}?action=addPoint&userId=${profile.userId}&pin=${encodeURIComponent(tokenString)}&t=${cacheBuster}`;
                     
-                    if (data.status === 'success') {
+                    const data = await fetchWithRetry(url, { method: 'GET' });
+                    
+                    if (data && data.status === 'success') {
                         animateNewStamp();
                         showMessage('สะสมแต้มสำเร็จ!', 'success');
                     } else {
-                        showMessage(data.message || 'รหัสนี้ถูกใช้งานไปแล้ว หรือเกิดข้อผิดพลาด', 'error');
+                        showMessage(data?.message || 'รหัสนี้ถูกใช้งานไปแล้ว หรือเกิดข้อผิดพลาด', 'error');
                     }
                 } catch (error) {
+                    console.error('Claim Error:', error);
                     showMessage('ระบบขัดข้อง กรุณาลองใหม่', 'error');
                 } finally {
                     setLoading(false);
@@ -238,7 +258,7 @@
                                             <span className="text-gray-300 font-semibold relative z-10">{i + 1}</span>
                                         )}
                                         
-                                        {/* Gift icon for specific milestones (e.g. 8 and 16) */}
+                                        {/* Gift icon for specific milestones (e.g. 10 and 11) */}
                                         {(!isEarned && (i === 10 || i === 11)) && (
                                             <i className="fas fa-gift text-gray-300 text-2xl absolute opacity-30 z-0"></i>
                                         )}
