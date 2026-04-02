@@ -216,6 +216,11 @@
                 setTimeout(() => setMessage({ show: false, text: '', type: '' }), 3000);
             };
 
+            // ---------------------------------------------------------
+            // เริ่มส่วนที่แก้ไข: จัดการหน้าจอ Loading และ Error อย่างถูกต้อง
+            // ---------------------------------------------------------
+            
+            // 1. สถานะกำลังโหลด
             if (loading && !profile) {
                 return (
                     <div className="flex flex-col items-center justify-center min-h-screen bg-pattern">
@@ -224,6 +229,44 @@
                     </div>
                 );
             }
+
+            // 2. สถานะดึง Profile ไม่สำเร็จ (กันไม่ให้หลุดไปหน้าหลักแล้วรูปแตก)
+            if (!loading && !profile) {
+                return (
+                    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 px-6 text-center">
+                        <div className="bg-white p-8 rounded-2xl shadow-lg max-w-sm w-full">
+                            <i className="fas fa-wifi text-5xl text-gray-400 mb-4"></i>
+                            <h2 className="text-xl font-bold text-gray-800 mb-2">การเชื่อมต่อขัดข้อง</h2>
+                            <p className="text-gray-500 text-sm mb-6">
+                                ระบบไม่สามารถดึงข้อมูลโปรไฟล์ได้<br/>
+                                <span className="font-semibold text-wurth-red">คำแนะนำ:</span> ลองปิด Wi-Fi แล้วใช้ 4G/5G หรือตรวจสอบอินเทอร์เน็ตของคุณ
+                            </p>
+                            <button 
+                                onClick={() => {
+                                    setLoading(true);
+                                    initializeLiff(); // สั่งให้เริ่มดึงข้อมูลใหม่
+                                }}
+                                className="w-full bg-wurth-red hover:bg-red-700 text-white font-bold py-3 rounded-xl transition-transform active:scale-95"
+                            >
+                                <i className="fas fa-sync-alt mr-2"></i> ลองใหม่อีกครั้ง
+                            </button>
+                        </div>
+                        {/* โชว์ Error Toast (ถ้ามี) */}
+                        {message.show && (
+                            <div className="mt-4 p-3 bg-red-100 text-red-600 rounded-lg text-sm w-full max-w-sm">
+                                {message.text}
+                            </div>
+                        )}
+                    </div>
+                );
+            }
+            // ---------------------------------------------------------
+            // สิ้นสุดส่วนที่แก้ไข 02.04.2026
+            // ---------------------------------------------------------
+
+            return (
+                <div className="min-h-screen pb-10 flex flex-col bg-gray-100">
+                {/* โค้ดหน้าหลักส่วน Header Section ... เหมือนเดิม */}
 
             return (
                 <div className="min-h-screen pb-10 flex flex-col bg-gray-100">
