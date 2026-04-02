@@ -79,7 +79,7 @@
                             // กรณีดึง Profile ไม่ได้ (อาจจะเพราะเรื่อง Permission)
                             console.error('Profile Fetch Error:', profileErr);
                             setLoading(false);
-                            showMessage('ไม่สามารถเข้าถึงโปรไฟล์ได้ กรุณาตรวจสอบการให้สิทธิ์', 'error');
+                            showMessage('ไม่สามารถเข้าถึงโปรไฟล์ได้ กรุณาตรวจสอบการให้สิทธิ์และเปิดใช้งานผ่านเมนู LINE Onboarding เท่านั้น', 'error');
                         }
                     } else {
                         // กรณีเปิดใน LINE แล้วสถานะหลุด ให้จับ Login ใหม่
@@ -258,7 +258,7 @@
                             <h2 className="text-xl font-bold text-gray-800 mb-2">การเชื่อมต่อขัดข้อง</h2>
                             <p className="text-gray-500 text-sm mb-6">
                                 ระบบไม่สามารถดึงข้อมูลโปรไฟล์ได้<br/>
-                                <span className="font-semibold text-wurth-red">คำแนะนำ:</span> ลองปิด Wi-Fi แล้วใช้ 4G/5G หรือตรวจสอบอินเทอร์เน็ตของคุณ
+                                <span className="font-semibold text-wurth-red">คำแนะนำ:</span> ลองปิด Wi-Fi แล้วใช้ 4G/5G หรือตรวจสอบอินเทอร์เน็ตของคุณ หรือปิด VPN
                             </p>
                             <button 
                                 onClick={() => {
