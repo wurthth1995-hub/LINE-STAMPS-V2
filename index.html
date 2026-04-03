@@ -65,21 +65,48 @@
                 initializeLiff();
             }, []);
 
+// 1. เพิ่ม State เช็คว่าต้องให้ผู้ใช้กดล็อกอินเองไหม
+            const [needManualLogin, setNeedManualLogin] = React.useState(false);
+
             const initializeLiff = async () => {
                 try {
-                    await liff.init({ liffId: LIFF_ID });
+                    await liff.init({ 
+                        liffId: LIFF_ID,
+                        withLoginOnExternalBrowser: true // พยายามให้มัน Auto Login ก่อน
+                    });
+                    
                     if (liff.isLoggedIn()) {
-                        const userProfile = await liff.getProfile();
-                        setProfile(userProfile);
-                        fetchUserData(userProfile);
+                        try {
+                            const userProfile = await liff.getProfile();
+                            if (userProfile && userProfile.userId) {
+                                setProfile(userProfile);
+                                fetchUserData(userProfile);
+                            } else {
+                                throw new Error('Profile data is incomplete');
+                            }
+                        } catch (profileErr) {
+                            console.error('Profile Fetch Error:', profileErr);
+                            setLoading(false);
+                            showMessage('ไม่สามารถเข้าถึงโปรไฟล์ได้ กรุณาตรวจสอบการให้สิทธิ์', 'error');
+                        }
                     } else {
-                        liff.login();
+                        // 2. ถ้า Auto Login ไม่ทำงาน หรือโดนบล็อก ให้เปลี่ยนสถานะโชว์ปุ่ม Login
+                        setLoading(false);
+                        setNeedManualLogin(true);
                     }
                 } catch (err) {
-                    console.error('LIFF Init Error', err);
+                    console.error('LIFF Init Error:', err);
                     setLoading(false);
-                    showMessage('การเชื่อมต่อกับ LINE ขัดข้อง กรุณากดปิดแล้วเปิดใหม่อีกครั้ง', 'error');
+                    
+                    // อุดช่องโหว่: ถ้า Init พังเพราะบล็อกคุกกี้ ให้ลองโชว์ปุ่มล็อกอินให้กดเอง
+                    setNeedManualLogin(true); 
                 }
+            };
+
+            // 3. สร้างฟังก์ชันสำหรับปุ่มกดล็อกอินด้วยมือ (Manual Login)
+            const handleManualLogin = () => {
+                // ใส่ตัวแปร redirectUri ป้องกันมันเด้งผิดหน้า (เปลี่ยน URL ให้ตรงกับ GitHub Pages ของคุณ)
+                liff.login({ redirectUri: window.location.href });
             };
 
             const fetchUserData = async (user) => {
@@ -90,14 +117,20 @@
                 }
                 try {
                     setLoading(true);
-                    const response = await fetch(`${GAS_URL}?action=getUser&userId=${user.userId}&displayName=${encodeURIComponent(user.displayName)}`);
-                    const data = await response.json();
-                    if (data.status === 'success') {
-                        setPoints(parseInt(data.points) || 0);
+                    
+                    // เพิ่ม Cache Buster ป้องกันการจำ URL เดิม
+                    const cacheBuster = new Date().getTime();
+                    const url = `${GAS_URL}?action=getUser&userId=${user.userId}&displayName=${encodeURIComponent(user.displayName)}&t=${cacheBuster}`;
+                    
+                    // ⚠️ เปลี่ยนจาก fetch ธรรมดา มาใช้ fetchWithRetry
+                    const data = await fetchWithRetry(url);
+                    
+                    if (data && data.status === 'success') {
+                        setPoints(parseInt(data.points, 10) || 0);
                     }
                 } catch (error) {
                     console.error('Error fetching user:', error);
-                    showMessage('ไม่สามารถโหลดข้อมูลได้', 'error');
+                    showMessage('ไม่สามารถโหลดข้อมูลได้ หรืออินเทอร์เน็ตขัดข้อง', 'error');
                 } finally {
                     setLoading(false);
                 }
@@ -135,28 +168,55 @@
                     }
                 }
             };
+
+            if (needManualLogin && !profile) {
+                return (
+                    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 px-6 text-center">
+                        <div className="bg-white p-8 rounded-2xl shadow-lg max-w-sm w-full border-t-4 border-wurth-red">
+                            <div className="bg-green-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <i className="fab fa-line text-5xl text-green-500"></i>
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-800 mb-2">เข้าสู่ระบบ LINE</h2>
+                            <p className="text-gray-500 text-sm mb-6">
+                                กรุณาเข้าสู่ระบบด้วยบัญชี LINE ของคุณเพื่อเริ่มสะสมแต้ม On Boarding Program
+                            </p>
+                            <button 
+                                onClick={handleManualLogin}
+                                className="w-full bg-[#06C755] hover:bg-green-600 text-white font-bold py-4 rounded-xl transition-transform active:scale-95 shadow-md flex items-center justify-center"
+                            >
+                                <i className="fab fa-line text-2xl mr-2"></i> ล็อกอินด้วย LINE
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
             
             const handleClaimToken = async (tokenString) => {
-                if (!tokenString) return;
+                // คลีนข้อมูลก่อน: ตัดช่องว่างและบังคับตัวพิมพ์ใหญ่
+                const cleanToken = tokenString.trim().toUpperCase();
+                if (!cleanToken) return;
                 
                 if (!GAS_URL || GAS_URL === 'YOUR_GOOGLE_APP_SCRIPT_WEB_APP_URL_HERE') {
-                    showMessage('จำลองการสแกน/กรอกรหัส: ' + tokenString, 'success');
+                    showMessage('จำลองการสแกน/กรอกรหัส: ' + cleanToken, 'success');
                     animateNewStamp();
                     return;
                 }
 
                 try {
                     setLoading(true);
-                    const response = await fetch(`${GAS_URL}?action=addPoint&userId=${profile.userId}&pin=${tokenString}`, {
-                        method: 'GET', // Using GET for simpler CORS handling in App Script
-                    });
-                    const data = await response.json();
                     
-                    if (data.status === 'success') {
+                    // เพิ่ม Cache Buster 
+                    const cacheBuster = new Date().getTime();
+                    const url = `${GAS_URL}?action=addPoint&userId=${profile.userId}&pin=${encodeURIComponent(cleanToken)}&t=${cacheBuster}`;
+                    
+                    // ⚠️ เปลี่ยนจาก fetch ธรรมดา มาใช้ fetchWithRetry
+                    const data = await fetchWithRetry(url, { method: 'GET' });
+                    
+                    if (data && data.status === 'success') {
                         animateNewStamp();
                         showMessage('สะสมแต้มสำเร็จ!', 'success');
                     } else {
-                        showMessage(data.message || 'รหัสนี้ถูกใช้งานไปแล้ว หรือเกิดข้อผิดพลาด', 'error');
+                        showMessage(data?.message || 'รหัสนี้ถูกใช้งานไปแล้ว หรือเกิดข้อผิดพลาด', 'error');
                     }
                 } catch (error) {
                     showMessage('ระบบขัดข้อง กรุณาลองใหม่', 'error');
@@ -298,7 +358,7 @@
                             <input 
                                 type="text" 
                                 value={pinInput}
-                                onChange={(e) => setPinInput(e.target.value)}
+                                onChange={(e) => setPinInput(e.target.value.toUpperCase())}
                                 placeholder="กรอกรหัสสะสมแต้ม..."
                                 disabled={loading || points >= TOTAL_STAMPS}
                                 className="flex-1 bg-white border border-gray-300 text-gray-900 text-sm rounded-xl focus:ring-wurth-red focus:border-wurth-red block p-3 shadow-sm"
