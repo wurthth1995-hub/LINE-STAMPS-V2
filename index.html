@@ -113,7 +113,9 @@
                         setPoints(parseInt(data.points, 10) || 0);
                     }
                 } catch (error) {
-                    showMessage('ไม่สามารถโหลดข้อมูลได้', 'error');
+                    console.error('Error fetching user:', error);
+                    // บังคับให้พ่นสาเหตุที่แท้จริงออกมาบนหน้าจอเลย
+                    showMessage(`โหลดข้อมูลไม่ได้: ${error.message}`, 'error');
                 } finally {
                     setLoading(false);
                 }
