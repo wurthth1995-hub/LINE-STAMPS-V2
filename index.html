@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>On Boarding Program - Reward Card</title>
+    
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -99,6 +103,39 @@
                 }
             };
 
+            // ฟังก์ชัน Fetch ที่มีความทนทานสูงขึ้น
+            const fetchWithRetry = async (url, options = {}, retries = 2) => {
+                
+                // เติม cache: 'no-store' เข้าไปตรงนี้เลยครับ (ยาแรงทะลวงแคช)
+                const fetchOptions = { 
+                    ...options, 
+                    redirect: 'follow', 
+                    cache: 'no-store', // <--- พระเอกของเราอยู่ตรงนี้ครับ
+                    headers: {
+                        'Cache-Control': 'no-cache, no-store, must-revalidate'
+                    }
+                };
+                
+                for (let i = 0; i <= retries; i++) {
+                    try {
+                        const res = await fetch(url, fetchOptions);
+                        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                        
+                        // ป้องกันกรณี GAS ล่มแล้วคืนค่าเป็นหน้าเว็บ HTML Error
+                        const contentType = res.headers.get("content-type");
+                        if (contentType && contentType.indexOf("application/json") !== -1) {
+                            return await res.json();
+                        } else {
+                            throw new Error("Response is not JSON.");
+                        }
+                    } catch (error) {
+                        if (i === retries) throw error; 
+                        console.warn(`Fetch failed, retrying... (${i + 1}/${retries})`);
+                        await new Promise(resolve => setTimeout(resolve, 1000)); 
+                    }
+                }
+            };
+            
             const handleClaimToken = async (tokenString) => {
                 if (!tokenString) return;
                 
