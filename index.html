@@ -69,9 +69,10 @@
             };
 
             const handleManualLogin = () => {
-                liff.login({ redirectUri: window.location.href });
+                // บังคับเปลี่ยน URL ให้เป็น Clean URL (ลบ parameter เก่าทิ้งก่อนล็อกอินใหม่)
+                const currentUrl = window.location.origin + window.location.pathname;
+                liff.login({ redirectUri: currentUrl });
             };
-
             const fetchWithRetry = async (url, options = {}, retries = 2) => {
                 const fetchOptions = { 
                     ...options, 
@@ -123,24 +124,44 @@
 
             const initializeLiff = async () => {
                 try {
+                    // 1. รอให้ LIFF Init เสร็จสมบูรณ์ (SDK จะอ่าน URL parameters ในขั้นตอนนี้)
                     await liff.init({ 
                         liffId: LIFF_ID,
                         withLoginOnExternalBrowser: true 
                     });
                     
+                    // 💡 ทริคสำคัญ: เพิ่มการดีเลย์เล็กน้อย (100ms) บนเบราว์เซอร์ภายนอก 
+                    // เพื่อให้ LIFF SDK เขียนคุกกี้ลงเครื่องให้เสร็จก่อนเช็คสถานะ
+                    if (!liff.isInClient()) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    
+                    // 2. ตรวจสอบสถานะการล็อกอิน
                     if (liff.isLoggedIn()) {
-                        const userProfile = await liff.getProfile();
-                        if (userProfile && userProfile.userId) {
-                            setProfile(userProfile);
-                            fetchUserData(userProfile);
-                        } else {
-                            throw new Error('Profile incomplete');
+                        try {
+                            const userProfile = await liff.getProfile();
+                            if (userProfile && userProfile.userId) {
+                                setProfile(userProfile);
+                                fetchUserData(userProfile);
+                            } else {
+                                throw new Error('Profile incomplete');
+                            }
+                        } catch (profileErr) {
+                            console.error('Profile Fetch Error:', profileErr);
+                            setLoading(false);
+                            
+                            // ถ้าดึง Profile ไม่ได้ ให้เคลียร์ Login ทิ้ง เพื่อไม่ให้ค้างลูป
+                            liff.logout(); 
+                            setNeedManualLogin(true);
+                            showMessage('เซสชันหมดอายุ กรุณาล็อกอินใหม่', 'warning');
                         }
                     } else {
+                        // 3. ถ้ายังไม่ล็อกอิน ค่อยโชว์ปุ่ม Login
                         setLoading(false);
                         setNeedManualLogin(true);
                     }
                 } catch (err) {
+                    console.error('LIFF Init Error:', err);
                     setLoading(false);
                     setNeedManualLogin(true); 
                 }
