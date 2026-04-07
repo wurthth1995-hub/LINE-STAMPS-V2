@@ -45,7 +45,7 @@
 
     <script type="text/babel">
         // URL ของ Cloudflare Worker ของคุณ
-        const GAS_URL = 'https://twilight-flower-e6e1.wurthth1995.workers.dev/'; 
+        const GAS_URL = 'https://holy-sky-b379.wurthth1995.workers.dev/'; 
         const TOTAL_STAMPS = 14;
         const LIFF_ID = '2009175418-UODHvYrB';
 
@@ -58,7 +58,9 @@
             const [message, setMessage] = React.useState({ show: false, text: '', type: '' });
             const [recentStampIndex, setRecentStampIndex] = React.useState(-1);
             const [needManualLogin, setNeedManualLogin] = React.useState(false);
-            const [collectedDepts, setCollectedDepts] = React.useState([]); // 🌟 บาสเพิ่ม State สำหรับเก็บแผนก
+            
+            // 🌟 บาสเพิ่ม State สำหรับเก็บแผนก
+            const [collectedDepts, setCollectedDepts] = React.useState([]); 
             
             // ประกาศไฟล์เสียง
             const successSound = React.useRef(typeof Audio !== "undefined" ? new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3') : null);
@@ -112,7 +114,9 @@
                     const data = await fetchWithRetry(url);
                     if (data && data.status === 'success') {
                         setPoints(parseInt(data.points, 10) || 0);
-                        setCollectedDepts(data.departments || []); // 🌟 บาสอัปเดต State แผนกจาก API
+                        // 🌟 อัปเดตข้อมูลแผนก + ใช้ Set เพื่อกรองรายชื่อแผนกไม่ให้ซ้ำกันบน UI (สำหรับคนเก่าและใหม่)
+                        const uniqueDepts = [...new Set(data.departments || [])];
+                        setCollectedDepts(uniqueDepts); 
                     }
                 } catch (error) {
                     console.error('Error fetching user:', error);
@@ -186,10 +190,15 @@
                     
                     if (data && data.status === 'success') {
                         animateNewStamp();
-                        // 🌟 บาสเพิ่ม: อัปเดตแผนกเข้าไปใน Array ทันทีที่สแกนผ่าน
+                        
+                        // 🌟 ดันชื่อแผนกใหม่เข้า State ทันทีที่สแกนผ่าน + กรองซ้ำด้วย Set
                         if (data.department) {
-                            setCollectedDepts(prev => [...prev, data.department]);
+                            setCollectedDepts(prev => {
+                                const newDepts = [...prev, data.department];
+                                return [...new Set(newDepts)]; // ป้องกันการโชว์แผนกซ้ำ
+                            });
                         }
+                        
                         showMessage('สะสมแต้มสำเร็จ!', 'success');
                     } else {
                         showMessage(data?.message || 'รหัสนี้ถูกใช้งานไปแล้ว', 'error');
@@ -289,17 +298,18 @@
                         {points >= TOTAL_STAMPS && <div className="mt-6 p-3 bg-green-100 text-green-700 text-center rounded-lg font-bold animate-bounce">🎉 ยินดีด้วย! คุณสะสมแต้มครบแล้ว 🎉</div>}
                     </div>
 
-                    {/* 🌟 บาสเพิ่ม UI แสดงรายชื่อแผนกที่สะสมแล้ว */}
-                    {collectedDepts.length > 0 && (
+                    {/* 🌟 UI แสดงแผนกที่สะสมแล้ว (Modern Badge Style) */}
+                    {collectedDepts && collectedDepts.length > 0 && (
                         <div className="mx-4 mt-4 bg-white rounded-2xl shadow-md p-5 border border-gray-100">
-                            <h3 className="text-gray-800 font-semibold mb-3 flex items-center text-sm">
-                                <i className="fas fa-check-circle text-green-500 mr-2"></i> แผนกที่คุณไปเยี่ยมชมมาแล้ว
+                            <h3 className="text-gray-600 font-medium mb-3 flex items-center text-sm">
+                                <i className="fas fa-map-marker-alt wurth-red mr-2"></i> แผนกที่เยี่ยมชมแล้ว
                             </h3>
                             <div className="flex flex-wrap gap-2">
                                 {collectedDepts.map((dept, index) => (
-                                    <span key={index} className="px-3 py-1 bg-red-50 text-wurth-red border border-red-100 rounded-full text-xs font-medium shadow-sm">
+                                    <div key={index} className="px-3 py-1.5 bg-red-50 border border-red-100 text-red-700 rounded-lg text-sm font-medium flex items-center shadow-sm">
+                                        <i className="fas fa-check-circle text-green-500 mr-1.5 text-xs"></i>
                                         {dept}
-                                    </span>
+                                    </div>
                                 ))}
                             </div>
                         </div>
