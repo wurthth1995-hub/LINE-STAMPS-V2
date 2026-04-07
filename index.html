@@ -4,12 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>On Boarding Program - Reward Card</title>
+    
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Kanit', sans-serif; background-color: #f4f4f4; overscroll-behavior-y: none; }
@@ -17,7 +23,6 @@
         .bg-wurth-red { background-color: #CC0000; }
         .border-wurth-red { border-color: #CC0000; }
         
-        /* Custom Stamp Animation */
         @keyframes stampPop {
             0% { transform: scale(0); opacity: 0; }
             50% { transform: scale(1.3); opacity: 1; }
@@ -27,14 +32,11 @@
             animation: stampPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
         
-        /* Background Pattern */
         .bg-pattern {
             background-color: #CC0000;
             background-image: radial-gradient(#990000 1px, transparent 1px);
             background-size: 20px 20px;
         }
-
-        /* Hide scrollbar for clean UI */
         ::-webkit-scrollbar { display: none; }
     </style>
 </head>
@@ -42,30 +44,99 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // ==========================================
-        // ตั้งค่า URL ของ Google Apps Script ที่นี่ !!
-        // ==========================================
-        const GAS_URL = 'https://script.google.com/macros/s/AKfycbyDD1B8zPRswF2orSAMPsglbUErWFzvxQ-hmOpG6ukgVcltbZnhej11_x5d3JwnkDNOzA/exec'; 
+        // URL ของ Cloudflare Worker ของคุณ
+        const GAS_URL = 'https://onboarding-stamps-api.wurthth1995.workers.dev/'; 
         const TOTAL_STAMPS = 14;
         const LIFF_ID = '2009175418-UODHvYrB';
 
         const App = () => {
+            // 1. ประกาศ State ทั้งหมดไว้บนสุดเสมอ (ห้ามสลับ)
             const [profile, setProfile] = React.useState(null);
             const [points, setPoints] = React.useState(0);
             const [loading, setLoading] = React.useState(true);
             const [pinInput, setPinInput] = React.useState('');
             const [message, setMessage] = React.useState({ show: false, text: '', type: '' });
             const [recentStampIndex, setRecentStampIndex] = React.useState(-1);
+            const [needManualLogin, setNeedManualLogin] = React.useState(false);
+            
+            // ประกาศไฟล์เสียง
+            const successSound = React.useRef(typeof Audio !== "undefined" ? new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3') : null);
+
+            // 2. ประกาศฟังก์ชันช่วยเหลือ (Helper Functions)
+            const showMessage = (text, type) => {
+                setMessage({ show: true, text, type });
+                setTimeout(() => setMessage({ show: false, text: '', type: '' }), 3000);
+            };
+
+            const handleManualLogin = () => {
+                // บังคับเปลี่ยน URL ให้เป็น Clean URL (ลบ parameter เก่าทิ้งก่อนล็อกอินใหม่)
+                const currentUrl = window.location.origin + window.location.pathname;
+                liff.login({ redirectUri: currentUrl });
+            };
+            const fetchWithRetry = async (url, options = {}, retries = 2) => {
+                const fetchOptions = { 
+                    ...options, 
+                    redirect: 'follow', 
+                    cache: 'no-store', 
+                    headers: {
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                    }
+                };
+                
+                for (let i = 0; i <= retries; i++) {
+                    try {
+                        const res = await fetch(url, fetchOptions);
+                        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                        
+                        const contentType = res.headers.get("content-type");
+                        if (contentType && contentType.includes("application/json")) {
+                            return await res.json();
+                        } else {
+                            throw new Error("Response is not JSON.");
+                        }
+                    } catch (error) {
+                        if (i === retries) throw error; 
+                        await new Promise(resolve => setTimeout(resolve, 1000)); 
+                    }
+                }
+            };
+
+            const fetchUserData = async (user) => {
+                try {
+                    setLoading(true);
+                    const cacheBuster = new Date().getTime();
+                    const url = `${GAS_URL}?action=getUser&userId=${user.userId}&displayName=${encodeURIComponent(user.displayName)}&t=${cacheBuster}`;
+                    
+                    const data = await fetchWithRetry(url);
+                    if (data && data.status === 'success') {
+                        setPoints(parseInt(data.points, 10) || 0);
+                    }
+                } catch (error) {
+                    console.error('Error fetching user:', error);
+                    // บังคับให้พ่นสาเหตุที่แท้จริงออกมาบนหน้าจอเลย
+                    showMessage(`โหลดข้อมูลไม่ได้: ${error.message}`, 'error');
+                } finally {
+                    setLoading(false);
+                }
+            };
 
             const initializeLiff = async () => {
                 try {
-                    // 1. เพิ่ม withLoginOnExternalBrowser ช่วยให้ระบบ Login เสถียรขึ้นแม้มีปัญหา Webview
+                    // 1. รอให้ LIFF Init เสร็จสมบูรณ์ (SDK จะอ่าน URL parameters ในขั้นตอนนี้)
                     await liff.init({ 
                         liffId: LIFF_ID,
                         withLoginOnExternalBrowser: true 
                     });
                     
-                    // 2. เช็คสถานะการ Login
+                    // 💡 ทริคสำคัญ: เพิ่มการดีเลย์เล็กน้อย (100ms) บนเบราว์เซอร์ภายนอก 
+                    // เพื่อให้ LIFF SDK เขียนคุกกี้ลงเครื่องให้เสร็จก่อนเช็คสถานะ
+                    if (!liff.isInClient()) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    
+                    // 2. ตรวจสอบสถานะการล็อกอิน
                     if (liff.isLoggedIn()) {
                         try {
                             const userProfile = await liff.getProfile();
@@ -73,142 +144,35 @@
                                 setProfile(userProfile);
                                 fetchUserData(userProfile);
                             } else {
-                                throw new Error('Profile data is incomplete');
+                                throw new Error('Profile incomplete');
                             }
                         } catch (profileErr) {
-                            // กรณีดึง Profile ไม่ได้ (อาจจะเพราะเรื่อง Permission)
                             console.error('Profile Fetch Error:', profileErr);
                             setLoading(false);
-                            showMessage('ไม่สามารถเข้าถึงโปรไฟล์ได้ กรุณาตรวจสอบการให้สิทธิ์และเปิดใช้งานผ่านเมนู LINE Onboarding เท่านั้น', 'error');
+                            
+                            // ถ้าดึง Profile ไม่ได้ ให้เคลียร์ Login ทิ้ง เพื่อไม่ให้ค้างลูป
+                            liff.logout(); 
+                            setNeedManualLogin(true);
+                            showMessage('เซสชันหมดอายุ กรุณาล็อกอินใหม่', 'warning');
                         }
                     } else {
-                        // กรณีเปิดใน LINE แล้วสถานะหลุด ให้จับ Login ใหม่
-                        liff.login();
+                        // 3. ถ้ายังไม่ล็อกอิน ค่อยโชว์ปุ่ม Login
+                        setLoading(false);
+                        setNeedManualLogin(true);
                     }
                 } catch (err) {
                     console.error('LIFF Init Error:', err);
                     setLoading(false);
-                    
-                    // 3. ดักจับ Error Message เพื่อให้หน้าบ้านโชว์สาเหตุที่แท้จริง
-                    let errorMessage = 'การเชื่อมต่อกับ LINE ขัดข้อง กรุณาปิดแล้วเปิดใหม่';
-                    
-                    if (err.code === '4003') { // 4003 คือ Error Code ของการไม่ให้สิทธิ์
-                        errorMessage = 'กรุณากด "อนุญาต" เพื่อเข้าใช้งานระบบ';
-                    } else if (err.message) {
-                        // โชว์ Error Message สั้นๆ ให้พอรู้สาเหตุ
-                        errorMessage = `ข้อผิดพลาด: ${err.message.substring(0, 40)}...`;
-                    }
-                    
-                    showMessage(errorMessage, 'error');
-                }
-            };
-
-            React.useEffect(() => {
-                initializeLiff();
-            }, []);
-
-
-            // ฟังก์ชัน Fetch ที่มีความทนทานสูงขึ้น (Retry Logic + Redirect Follow)
-            const fetchWithRetry = async (url, options = {}, retries = 2) => {
-                const fetchOptions = { ...options, redirect: 'follow' };
-                
-                for (let i = 0; i <= retries; i++) {
-                    try {
-                        const res = await fetch(url, fetchOptions);
-                        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-                        
-                        // ป้องกันกรณี GAS ล่มแล้วคืนค่าเป็นหน้าเว็บ HTML Error
-                        const contentType = res.headers.get("content-type");
-                        if (contentType && contentType.indexOf("application/json") !== -1) {
-                            return await res.json();
-                        } else {
-                            throw new Error("Response is not JSON.");
-                        }
-                    } catch (error) {
-                        if (i === retries) throw error; 
-                        console.warn(`Fetch failed, retrying... (${i + 1}/${retries})`);
-                        await new Promise(resolve => setTimeout(resolve, 1000)); 
-                    }
-                }
-            };
-
-            const fetchUserData = async (user) => {
-                if (!GAS_URL || GAS_URL === 'YOUR_GOOGLE_APP_SCRIPT_WEB_APP_URL_HERE') return;
-                if (!user || !user.userId) return;
-
-                try {
-                    setLoading(true);
-                    // Cache Buster: แนบ Timestamp เพื่อหลีกเลี่ยงอาการ LINE Browser จำข้อมูลเก่า (แต้ม 0)
-                    const cacheBuster = new Date().getTime();
-                    const url = `${GAS_URL}?action=getUser&userId=${user.userId}&displayName=${encodeURIComponent(user.displayName)}&t=${cacheBuster}`;
-                    
-                    const data = await fetchWithRetry(url);
-
-                    if (data && data.status === 'success') {
-                        const userPoints = parseInt(data.points, 10);
-                        setPoints(isNaN(userPoints) ? 0 : userPoints);
-                    } else {
-                        throw new Error(data?.message || 'Invalid response format');
-                    }
-                } catch (error) {
-                    console.error('Error fetching user:', error);
-                    showMessage('เซิร์ฟเวอร์ตอบสนองช้า กรุณาลองใหม่อีกครั้ง', 'error');
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const handleClaimToken = async (tokenString) => {
-                if (!tokenString) return;
-                
-                if (!GAS_URL || GAS_URL === 'YOUR_GOOGLE_APP_SCRIPT_WEB_APP_URL_HERE') {
-                    showMessage('จำลองการสแกน/กรอกรหัส: ' + tokenString, 'success');
-                    animateNewStamp();
-                    return;
-                }
-
-                try {
-                    setLoading(true);
-                    const cacheBuster = new Date().getTime();
-                    const url = `${GAS_URL}?action=addPoint&userId=${profile.userId}&pin=${encodeURIComponent(tokenString)}&t=${cacheBuster}`;
-                    
-                    const data = await fetchWithRetry(url, { method: 'GET' });
-                    
-                    if (data && data.status === 'success') {
-                        animateNewStamp();
-                        showMessage('สะสมแต้มสำเร็จ!', 'success');
-                    } else {
-                        showMessage(data?.message || 'รหัสนี้ถูกใช้งานไปแล้ว หรือเกิดข้อผิดพลาด', 'error');
-                    }
-                } catch (error) {
-                    console.error('Claim Error:', error);
-                    showMessage('ระบบขัดข้อง กรุณาลองใหม่', 'error');
-                } finally {
-                    setLoading(false);
-                    setPinInput('');
+                    setNeedManualLogin(true); 
                 }
             };
 
             const animateNewStamp = () => {
-                // 1. ลองสั่งสั่น (ทำงานเฉพาะบน Android)
-                if (navigator.vibrate) {
-                    // ใช้ try-catch ครอบไว้อีกชั้นเพื่อความปลอดภัยสูงสุด
-                    try {
-                        navigator.vibrate(100); 
-                    } catch (e) {
-                        console.warn("Vibration API error:", e);
-                    }
-                }
-                
-                // 2. เล่นเสียง Success (ทำงานได้ทั้ง iOS และ Android)
+                if (navigator.vibrate) { try { navigator.vibrate(100); } catch(e) {} }
                 if (successSound.current) {
-                    successSound.current.currentTime = 0; // รีเซ็ตเสียงกลับไปจุดเริ่มต้น (เผื่อกดรัวๆ)
-                    successSound.current.play().catch(e => {
-                        console.warn("Autoplay prevented by browser:", e);
-                    });
+                    successSound.current.currentTime = 0;
+                    successSound.current.play().catch(e => {});
                 }
-                
-                // 3. เพิ่มแต้มและเล่นอนิเมชัน
                 setPoints(prev => {
                     const newPoints = Math.min(prev + 1, TOTAL_STAMPS);
                     setRecentStampIndex(newPoints - 1);
@@ -216,30 +180,47 @@
                 });
             };
 
-            const scanQRCode = () => {
-                if (liff.scanCodeV2) {
-                    liff.scanCodeV2().then((result) => {
-                        if (result && result.value) {
-                            handleClaimToken(result.value);
-                        }
-                    }).catch((err) => {
-                        showMessage('ไม่สามารถเปิดกล้องสแกนได้', 'error');
-                    });
-                } else {
-                    showMessage('อุปกรณ์ของคุณไม่รองรับการสแกน QR Code', 'warning');
+            const handleClaimToken = async (tokenString) => {
+                const cleanToken = tokenString.trim().toUpperCase();
+                if (!cleanToken) return;
+
+                try {
+                    setLoading(true);
+                    const cacheBuster = new Date().getTime();
+                    const url = `${GAS_URL}?action=addPoint&userId=${profile.userId}&pin=${encodeURIComponent(cleanToken)}&t=${cacheBuster}`;
+                    
+                    const data = await fetchWithRetry(url, { method: 'GET' });
+                    
+                    if (data && data.status === 'success') {
+                        animateNewStamp();
+                        showMessage('สะสมแต้มสำเร็จ!', 'success');
+                    } else {
+                        showMessage(data?.message || 'รหัสนี้ถูกใช้งานไปแล้ว', 'error');
+                    }
+                } catch (error) {
+                    showMessage('ระบบขัดข้อง กรุณาลองใหม่', 'error');
+                } finally {
+                    setLoading(false);
+                    setPinInput('');
                 }
             };
 
-            const showMessage = (text, type) => {
-                setMessage({ show: true, text, type });
-                setTimeout(() => setMessage({ show: false, text: '', type: '' }), 3000);
+            const scanQRCode = () => {
+                if (liff.scanCodeV2) {
+                    liff.scanCodeV2().then((result) => {
+                        if (result && result.value) handleClaimToken(result.value);
+                    }).catch(() => showMessage('ไม่สามารถเปิดกล้องสแกนได้', 'error'));
+                } else {
+                    showMessage('อุปกรณ์ไม่รองรับการสแกน', 'warning');
+                }
             };
 
-            // ---------------------------------------------------------
-            // เริ่มส่วนที่แก้ไข: จัดการหน้าจอ Loading และ Error อย่างถูกต้อง
-            // ---------------------------------------------------------
-            
-            // 1. สถานะกำลังโหลด
+            // 3. useEffect ต้องอยู่หลังสุด หลังจากสร้างฟังก์ชันเสร็จแล้ว
+            React.useEffect(() => {
+                initializeLiff();
+            }, []);
+
+            // 4. ส่วนแสดงผล UI (Render)
             if (loading && !profile) {
                 return (
                     <div className="flex flex-col items-center justify-center min-h-screen bg-pattern">
@@ -249,79 +230,51 @@
                 );
             }
 
-            // 2. สถานะดึง Profile ไม่สำเร็จ (กันไม่ให้หลุดไปหน้าหลักแล้วรูปแตก)
-            if (!loading && !profile) {
+            if (needManualLogin && !profile) {
                 return (
                     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 px-6 text-center">
-                        <div className="bg-white p-8 rounded-2xl shadow-lg max-w-sm w-full">
-                            <i className="fas fa-wifi text-5xl text-gray-400 mb-4"></i>
-                            <h2 className="text-xl font-bold text-gray-800 mb-2">การเชื่อมต่อขัดข้อง</h2>
-                            <p className="text-gray-500 text-sm mb-6">
-                                ระบบไม่สามารถดึงข้อมูลโปรไฟล์ได้<br/>
-                                <span className="font-semibold text-wurth-red">คำแนะนำ:</span> ลองปิด Wi-Fi แล้วใช้ 4G/5G หรือตรวจสอบอินเทอร์เน็ตของคุณ หรือปิด VPN
-                            </p>
-                            <button 
-                                onClick={() => {
-                                    setLoading(true);
-                                    initializeLiff(); // สั่งให้เริ่มดึงข้อมูลใหม่
-                                }}
-                                className="w-full bg-wurth-red hover:bg-red-700 text-white font-bold py-3 rounded-xl transition-transform active:scale-95"
-                            >
-                                <i className="fas fa-sync-alt mr-2"></i> ลองใหม่อีกครั้ง
+                        <div className="bg-white p-8 rounded-2xl shadow-lg max-w-sm w-full border-t-4 border-wurth-red">
+                            <div className="bg-green-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <i className="fab fa-line text-5xl text-green-500"></i>
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-800 mb-2">เข้าสู่ระบบ LINE</h2>
+                            <p className="text-gray-500 text-sm mb-6">กรุณาเข้าสู่ระบบด้วยบัญชี LINE ของคุณเพื่อเริ่มสะสมแต้ม</p>
+                            <button onClick={handleManualLogin} className="w-full bg-[#06C755] hover:bg-green-600 text-white font-bold py-4 rounded-xl transition-transform active:scale-95 shadow-md flex items-center justify-center">
+                                <i className="fab fa-line text-2xl mr-2"></i> ล็อกอินด้วย LINE
                             </button>
                         </div>
-                        {/* โชว์ Error Toast (ถ้ามี) */}
-                        {message.show && (
-                            <div className="mt-4 p-3 bg-red-100 text-red-600 rounded-lg text-sm w-full max-w-sm">
-                                {message.text}
-                            </div>
-                        )}
                     </div>
                 );
             }
-            // ---------------------------------------------------------
-            // สิ้นสุดส่วนที่แก้ไข 02.04.2026
-            // ---------------------------------------------------------
+
             return (
                 <div className="min-h-screen pb-10 flex flex-col bg-gray-100">
-                    {/* Header Section */}
+                    {/* Header */}
                     <div className="bg-pattern pt-8 pb-16 px-4 rounded-b-[2.5rem] shadow-lg relative">
                         <div className="flex items-center justify-between">
                             <div className="bg-white p-2 rounded-xl shadow-sm">
-                                <img src="https://www.wuerth.co.th/media/system/layout_wl2bootstrap/bootstrap_system_images/wuerth_logo_big.png" alt="Wuerth Logo" className="h-6 sm:h-8 w-auto flex-shrink-0" />
+                                <img src="https://www.wuerth.co.th/media/system/layout_wl2bootstrap/bootstrap_system_images/wuerth_logo_big.png" alt="Wuerth Logo" className="h-6 sm:h-8 w-auto" />
                             </div>
-                            <h1 className="text-white text-xl font-bold tracking-wide text-right">
-                                ON BOARDING <br/><span className="text-gray-200 text-sm font-normal">PROGRAM</span>
-                            </h1>
+                            <h1 className="text-white text-xl font-bold tracking-wide text-right">ON BOARDING <br/><span className="text-gray-200 text-sm font-normal">PROGRAM</span></h1>
                         </div>
-                        
                         <div className="absolute -bottom-12 left-0 right-0 px-6">
                             <div className="bg-white rounded-2xl shadow-xl p-4 flex items-center space-x-4 border-t-4 border-wurth-red">
-                                <img 
-                                    src={profile?.pictureUrl || 'https://via.placeholder.com/150'} 
-                                    alt="Profile" 
-                                    className="w-16 h-16 rounded-full border-2 border-gray-100 shadow-sm object-cover"
-                                />
+                                <img src={profile?.pictureUrl || 'https://via.placeholder.com/150'} alt="Profile" className="w-16 h-16 rounded-full border-2 border-gray-100 shadow-sm object-cover" />
                                 <div>
                                     <h2 className="text-gray-800 font-bold text-lg">{profile?.displayName || 'User'}</h2>
-                                    <div className="flex items-center text-sm text-gray-500 mt-1">
-                                        <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
-                                        สมาชิกที่ใช้งานอยู่
-                                    </div>
+                                    <div className="flex items-center text-sm text-gray-500 mt-1"><div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>สมาชิกที่ใช้งานอยู่</div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Progress Text */}
+                    {/* Progress */}
                     <div className="mt-20 px-6 text-center">
                         <h3 className="text-gray-600 font-medium">คะแนนสะสมของคุณ</h3>
-                        <div className="text-4xl font-bold wurth-red mt-1">
-                            {points} <span className="text-xl text-gray-400 font-normal">/ {TOTAL_STAMPS}</span>
-                        </div>
+                        <div className="text-4xl font-bold wurth-red mt-1">{points} <span className="text-xl text-gray-400 font-normal">/ {TOTAL_STAMPS}</span></div>
                     </div>
 
-                    {/* Stamps Card Grid */}
+                    {/* Stamps */}
                     <div className="mx-4 mt-6 bg-white rounded-2xl shadow-md p-5 border border-gray-100">
                         <div className="grid grid-cols-4 gap-4">
                             {Array.from({ length: TOTAL_STAMPS }).map((_, i) => {
@@ -329,88 +282,31 @@
                                 const isRecent = i === recentStampIndex;
                                 return (
                                     <div key={i} className="relative aspect-square flex items-center justify-center">
-                                        {/* Background Circle */}
                                         <div className={`absolute inset-0 rounded-full border-2 transition-colors duration-300 ${isEarned ? 'border-wurth-red bg-red-50' : 'border-gray-200 bg-gray-50'}`}></div>
-                                        
-                                        {/* Stamp Icon */}
-                                        {isEarned ? (
-                                            <i className={`fas fa-star wurth-red text-2xl relative z-10 ${isRecent ? 'stamp-animate' : ''}`}></i>
-                                        ) : (
-                                            <span className="text-gray-300 font-semibold relative z-10">{i + 1}</span>
-                                        )}
-                                        
-                                        {/* Gift icon for specific milestones (e.g. 10 and 11) */}
-                                        {(!isEarned && (i === 10 || i === 11)) && (
-                                            <i className="fas fa-gift text-gray-300 text-2xl absolute opacity-30 z-0"></i>
-                                        )}
+                                        {isEarned ? <i className={`fas fa-star wurth-red text-2xl relative z-10 ${isRecent ? 'stamp-animate' : ''}`}></i> : <span className="text-gray-300 font-semibold relative z-10">{i + 1}</span>}
+                                        {(!isEarned && (i === 10 || i === 11)) && <i className="fas fa-gift text-gray-300 text-2xl absolute opacity-30 z-0"></i>}
                                     </div>
                                 );
                             })}
                         </div>
-                        
-                        {points >= TOTAL_STAMPS && (
-                            <div className="mt-6 p-3 bg-green-100 text-green-700 text-center rounded-lg font-bold animate-bounce">
-                                🎉 ยินดีด้วย! คุณสะสมแต้มครบแล้ว 🎉
-                            </div>
-                        )}
+                        {points >= TOTAL_STAMPS && <div className="mt-6 p-3 bg-green-100 text-green-700 text-center rounded-lg font-bold animate-bounce">🎉 ยินดีด้วย! คุณสะสมแต้มครบแล้ว 🎉</div>}
                     </div>
 
-                    {/* Input Section */}
+                    {/* Controls */}
                     <div className="mt-6 px-4 space-y-4 mb-8">
-                        {/* Option 1: QR Code Scanner */}
-                        <button 
-                            onClick={scanQRCode}
-                            disabled={loading || points >= TOTAL_STAMPS}
-                            className={`w-full py-4 rounded-xl text-white font-bold shadow-lg flex items-center justify-center space-x-2 transition-transform active:scale-95 ${points >= TOTAL_STAMPS ? 'bg-gray-400' : 'bg-wurth-red hover:bg-red-700'}`}
-                        >
-                            <i className="fas fa-qrcode text-xl"></i>
-                            <span>สแกน QR Code รับแต้ม</span>
+                        <button onClick={scanQRCode} disabled={loading || points >= TOTAL_STAMPS} className={`w-full py-4 rounded-xl text-white font-bold shadow-lg flex items-center justify-center space-x-2 transition-transform active:scale-95 ${points >= TOTAL_STAMPS ? 'bg-gray-400' : 'bg-wurth-red hover:bg-red-700'}`}>
+                            <i className="fas fa-qrcode text-xl"></i><span>สแกน QR Code รับแต้ม</span>
                         </button>
-
-                        <div className="relative flex py-2 items-center">
-                            <div className="flex-grow border-t border-gray-300"></div>
-                            <span className="flex-shrink-0 mx-4 text-gray-400 text-sm">หรือกรอกรหัสด้วยตัวเอง</span>
-                            <div className="flex-grow border-t border-gray-300"></div>
-                        </div>
-
-                        {/* Option 2: Manual Input */}
+                        <div className="relative flex py-2 items-center"><div className="flex-grow border-t border-gray-300"></div><span className="flex-shrink-0 mx-4 text-gray-400 text-sm">หรือกรอกรหัสด้วยตัวเอง</span><div className="flex-grow border-t border-gray-300"></div></div>
                         <div className="flex space-x-2">
-                            <input 
-                                type="text" 
-                                value={pinInput}
-                                onChange={(e) => setPinInput(e.target.value)}
-                                placeholder="กรอกรหัสสะสมแต้ม..."
-                                disabled={loading || points >= TOTAL_STAMPS}
-                                className="flex-1 bg-white border border-gray-300 text-gray-900 text-sm rounded-xl focus:ring-wurth-red focus:border-wurth-red block p-3 shadow-sm"
-                            />
-                            <button 
-                                onClick={() => handleClaimToken(pinInput)}
-                                disabled={!pinInput || loading || points >= TOTAL_STAMPS}
-                                className="bg-gray-800 hover:bg-black text-white px-6 rounded-xl font-bold shadow-sm disabled:bg-gray-400 active:scale-95 transition-transform"
-                            >
-                                ยืนยัน
-                            </button>
+                            <input type="text" value={pinInput} onChange={(e) => setPinInput(e.target.value.toUpperCase())} placeholder="กรอกรหัสสะสมแต้ม..." disabled={loading || points >= TOTAL_STAMPS} className="flex-1 bg-white border border-gray-300 text-gray-900 text-sm rounded-xl focus:ring-wurth-red focus:border-wurth-red block p-3 shadow-sm uppercase" />
+                            <button onClick={() => handleClaimToken(pinInput)} disabled={!pinInput || loading || points >= TOTAL_STAMPS} className="bg-gray-800 hover:bg-black text-white px-6 rounded-xl font-bold shadow-sm disabled:bg-gray-400 active:scale-95 transition-transform">ยืนยัน</button>
                         </div>
                     </div>
 
-                    {/* Toast Notification */}
-                    {message.show && (
-                        <div className="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 w-[90%] max-w-sm">
-                            <div className={`p-4 rounded-xl shadow-xl text-center text-white font-medium ${message.type === 'error' ? 'bg-red-600' : message.type === 'warning' ? 'bg-yellow-500' : 'bg-green-600'}`}>
-                                {message.text}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Loading Overlay */}
-                    {loading && profile && (
-                        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 flex items-center justify-center">
-                            <div className="bg-white p-4 rounded-xl shadow-lg flex items-center space-x-3">
-                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-wurth-red"></div>
-                                <span className="font-medium text-gray-700">กำลังประมวลผล...</span>
-                            </div>
-                        </div>
-                    )}
+                    {/* Toast & Overlay */}
+                    {message.show && <div className="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 w-[90%] max-w-sm"><div className={`p-4 rounded-xl shadow-xl text-center text-white font-medium ${message.type === 'error' ? 'bg-red-600' : message.type === 'warning' ? 'bg-yellow-500' : 'bg-green-600'}`}>{message.text}</div></div>}
+                    {loading && profile && <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 flex items-center justify-center"><div className="bg-white p-4 rounded-xl shadow-lg flex items-center space-x-3"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-wurth-red"></div><span className="font-medium text-gray-700">กำลังประมวลผล...</span></div></div>}
                 </div>
             );
         };
