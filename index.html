@@ -58,6 +58,7 @@
             const [message, setMessage] = React.useState({ show: false, text: '', type: '' });
             const [recentStampIndex, setRecentStampIndex] = React.useState(-1);
             const [needManualLogin, setNeedManualLogin] = React.useState(false);
+            const [collectedDepts, setCollectedDepts] = React.useState([]); // 🌟 บาสเพิ่ม State สำหรับเก็บแผนก
             
             // ประกาศไฟล์เสียง
             const successSound = React.useRef(typeof Audio !== "undefined" ? new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3') : null);
@@ -69,7 +70,6 @@
             };
 
             const handleManualLogin = () => {
-                // บังคับเปลี่ยน URL ให้เป็น Clean URL (ลบ parameter เก่าทิ้งก่อนล็อกอินใหม่)
                 const currentUrl = window.location.origin + window.location.pathname;
                 liff.login({ redirectUri: currentUrl });
             };
@@ -112,10 +112,10 @@
                     const data = await fetchWithRetry(url);
                     if (data && data.status === 'success') {
                         setPoints(parseInt(data.points, 10) || 0);
+                        setCollectedDepts(data.departments || []); // 🌟 บาสอัปเดต State แผนกจาก API
                     }
                 } catch (error) {
                     console.error('Error fetching user:', error);
-                    // บังคับให้พ่นสาเหตุที่แท้จริงออกมาบนหน้าจอเลย
                     showMessage(`โหลดข้อมูลไม่ได้: ${error.message}`, 'error');
                 } finally {
                     setLoading(false);
@@ -124,19 +124,15 @@
 
             const initializeLiff = async () => {
                 try {
-                    // 1. รอให้ LIFF Init เสร็จสมบูรณ์ (SDK จะอ่าน URL parameters ในขั้นตอนนี้)
                     await liff.init({ 
                         liffId: LIFF_ID,
                         withLoginOnExternalBrowser: true 
                     });
                     
-                    // 💡 ทริคสำคัญ: เพิ่มการดีเลย์เล็กน้อย (100ms) บนเบราว์เซอร์ภายนอก 
-                    // เพื่อให้ LIFF SDK เขียนคุกกี้ลงเครื่องให้เสร็จก่อนเช็คสถานะ
                     if (!liff.isInClient()) {
                         await new Promise(resolve => setTimeout(resolve, 100));
                     }
                     
-                    // 2. ตรวจสอบสถานะการล็อกอิน
                     if (liff.isLoggedIn()) {
                         try {
                             const userProfile = await liff.getProfile();
@@ -149,14 +145,11 @@
                         } catch (profileErr) {
                             console.error('Profile Fetch Error:', profileErr);
                             setLoading(false);
-                            
-                            // ถ้าดึง Profile ไม่ได้ ให้เคลียร์ Login ทิ้ง เพื่อไม่ให้ค้างลูป
                             liff.logout(); 
                             setNeedManualLogin(true);
                             showMessage('เซสชันหมดอายุ กรุณาล็อกอินใหม่', 'warning');
                         }
                     } else {
-                        // 3. ถ้ายังไม่ล็อกอิน ค่อยโชว์ปุ่ม Login
                         setLoading(false);
                         setNeedManualLogin(true);
                     }
@@ -193,6 +186,10 @@
                     
                     if (data && data.status === 'success') {
                         animateNewStamp();
+                        // 🌟 บาสเพิ่ม: อัปเดตแผนกเข้าไปใน Array ทันทีที่สแกนผ่าน
+                        if (data.department) {
+                            setCollectedDepts(prev => [...prev, data.department]);
+                        }
                         showMessage('สะสมแต้มสำเร็จ!', 'success');
                     } else {
                         showMessage(data?.message || 'รหัสนี้ถูกใช้งานไปแล้ว', 'error');
@@ -291,6 +288,22 @@
                         </div>
                         {points >= TOTAL_STAMPS && <div className="mt-6 p-3 bg-green-100 text-green-700 text-center rounded-lg font-bold animate-bounce">🎉 ยินดีด้วย! คุณสะสมแต้มครบแล้ว 🎉</div>}
                     </div>
+
+                    {/* 🌟 บาสเพิ่ม UI แสดงรายชื่อแผนกที่สะสมแล้ว */}
+                    {collectedDepts.length > 0 && (
+                        <div className="mx-4 mt-4 bg-white rounded-2xl shadow-md p-5 border border-gray-100">
+                            <h3 className="text-gray-800 font-semibold mb-3 flex items-center text-sm">
+                                <i className="fas fa-check-circle text-green-500 mr-2"></i> แผนกที่คุณไปเยี่ยมชมมาแล้ว
+                            </h3>
+                            <div className="flex flex-wrap gap-2">
+                                {collectedDepts.map((dept, index) => (
+                                    <span key={index} className="px-3 py-1 bg-red-50 text-wurth-red border border-red-100 rounded-full text-xs font-medium shadow-sm">
+                                        {dept}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Controls */}
                     <div className="mt-6 px-4 space-y-4 mb-8">
