@@ -1,620 +1,349 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>On Boarding Program - Reward Card</title>
-
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
-
-        body {
-            font-family: 'Kanit', sans-serif;
-            background-color: #f4f4f4;
-            overscroll-behavior-y: none;
-        }
-
-        .wurth-red { color: #CC0000; }
-        .bg-wurth-red { background-color: #CC0000; }
-        .border-wurth-red { border-color: #CC0000; }
-
-        @keyframes stampPop {
-            0% { transform: scale(0); opacity: 0; }
-            50% { transform: scale(1.3); opacity: 1; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-
-        .stamp-animate {
-            animation: stampPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-        }
-
-        .bg-pattern {
-            background-color: #CC0000;
-            background-image: radial-gradient(#990000 1px, transparent 1px);
-            background-size: 20px 20px;
-        }
-
-        ::-webkit-scrollbar { display: none; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>On Boarding Program - Reward Card</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Kanit', sans-serif; background: #f4f4f4; overscroll-behavior-y: none; }
+    .wurth-red { color: #CC0000; }
+    .bg-wurth-red { background: #CC0000; }
+    .border-wurth-red { border-color: #CC0000; }
+    .bg-pattern { background: #CC0000; background-image: radial-gradient(#990000 1px, transparent 1px); background-size: 20px 20px; }
+    @keyframes stampPop { 0% { transform: scale(0); opacity: 0; } 50% { transform: scale(1.25); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+    .stamp-animate { animation: stampPop .45s cubic-bezier(.175,.885,.32,1.275) forwards; }
+    ::-webkit-scrollbar { display: none; }
+  </style>
 </head>
 <body>
-    <div id="root"></div>
-
-    <script type="text/babel">
-        const GAS_URL = 'https://onboarding-stamps-api.wurthth1995.workers.dev/';
-        const TOTAL_STAMPS = 14;
-        const LIFF_ID = '2009175418-UODHvYrB';
-        const STORED_WN_KEY = 'onboarding.backup.wn';
-
-        const App = () => {
-            const [authSession, setAuthSession] = React.useState(null);
-            const [points, setPoints] = React.useState(0);
-            const [loading, setLoading] = React.useState(true);
-            const [pinInput, setPinInput] = React.useState('');
-            const [fallbackWnInput, setFallbackWnInput] = React.useState('');
-            const [backupWnInput, setBackupWnInput] = React.useState('');
-            const [backupLinked, setBackupLinked] = React.useState(false);
-            const [linkedWnNumber, setLinkedWnNumber] = React.useState('');
-            const [message, setMessage] = React.useState({ show: false, text: '', type: '' });
-            const [recentStampIndex, setRecentStampIndex] = React.useState(-1);
-            const [needManualLogin, setNeedManualLogin] = React.useState(false);
-
-            const successSound = React.useRef(typeof Audio !== 'undefined' ? new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3') : null);
-
-            const showMessage = React.useCallback((text, type) => {
-                setMessage({ show: true, text, type });
-                window.clearTimeout(showMessage.timerId);
-                showMessage.timerId = window.setTimeout(() => {
-                    setMessage({ show: false, text: '', type: '' });
-                }, 3500);
-            }, []);
-
-            const saveRememberedWn = (wnNumber) => {
-                if (!wnNumber) return;
-                try {
-                    window.localStorage.setItem(STORED_WN_KEY, wnNumber);
-                } catch (error) {
-                    console.warn('Unable to store WN Number', error);
-                }
-            };
-
-            const getRememberedWn = () => {
-                try {
-                    return (window.localStorage.getItem(STORED_WN_KEY) || '').trim().toUpperCase();
-                } catch (error) {
-                    return '';
-                }
-            };
-
-            const fetchWithRetry = async (url, options = {}, retries = 2) => {
-                const fetchOptions = {
-                    ...options,
-                    redirect: 'follow',
-                    cache: 'no-store',
-                    headers: {
-                        'Cache-Control': 'no-cache, no-store, must-revalidate',
-                        'Pragma': 'no-cache',
-                        'Expires': '0',
-                        ...(options.headers || {})
-                    }
-                };
-
-                for (let i = 0; i <= retries; i += 1) {
-                    try {
-                        const res = await fetch(url, fetchOptions);
-                        if (!res.ok) {
-                            throw new Error(`HTTP error! status: ${res.status}`);
-                        }
-
-                        const contentType = res.headers.get('content-type');
-                        if (contentType && contentType.includes('application/json')) {
-                            return await res.json();
-                        }
-
-                        throw new Error('Response is not JSON.');
-                    } catch (error) {
-                        if (i === retries) {
-                            throw error;
-                        }
-                        await new Promise((resolve) => setTimeout(resolve, 1000));
-                    }
-                }
-            };
-
-            const buildApiUrl = (params) => {
-                const url = new URL(GAS_URL);
-                Object.entries(params).forEach(([key, value]) => {
-                    if (value !== undefined && value !== null && value !== '') {
-                        url.searchParams.set(key, value);
-                    }
-                });
-                url.searchParams.set('t', Date.now().toString());
-                return url.toString();
-            };
-
-            const applyUserPayload = (data, sessionOverrides = {}) => {
-                const session = {
-                    mode: data.authMethod === 'wn' ? 'wn' : 'line',
-                    userId: data.userId || '',
-                    displayName: data.displayName || sessionOverrides.displayName || 'User',
-                    pictureUrl: sessionOverrides.pictureUrl || '',
-                    wnNumber: data.wnNumber || sessionOverrides.wnNumber || ''
-                };
-
-                setAuthSession(session);
-                setPoints(parseInt(data.points, 10) || 0);
-                setBackupLinked(Boolean(data.backupLinked));
-                setLinkedWnNumber(data.wnNumber || '');
-                setBackupWnInput(data.wnNumber || session.wnNumber || getRememberedWn());
-
-                if (data.wnNumber) {
-                    saveRememberedWn(data.wnNumber);
-                    setFallbackWnInput(data.wnNumber);
-                }
-
-                setNeedManualLogin(false);
-            };
-
-            const fetchUserByLine = async (userProfile, wnNumber = '') => {
-                setLoading(true);
-
-                try {
-                    const data = await fetchWithRetry(buildApiUrl({
-                        action: 'getUser',
-                        userId: userProfile.userId,
-                        displayName: userProfile.displayName,
-                        wnNumber
-                    }));
-
-                    if (data && data.status === 'success') {
-                        applyUserPayload(data, {
-                            displayName: userProfile.displayName,
-                            pictureUrl: userProfile.pictureUrl || '',
-                            wnNumber
-                        });
-                    } else {
-                        throw new Error(data?.message || 'โหลดข้อมูลผู้ใช้ไม่สำเร็จ');
-                    }
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const fetchUserByWn = async (wnNumber) => {
-                const cleanWn = (wnNumber || '').trim().toUpperCase();
-                if (!cleanWn) {
-                    showMessage('กรุณากรอก WN Number เช่น WNN12345', 'warning');
-                    return;
-                }
-
-                setLoading(true);
-
-                try {
-                    const data = await fetchWithRetry(buildApiUrl({
-                        action: 'getUser',
-                        wnNumber: cleanWn
-                    }));
-
-                    if (data && data.status === 'success') {
-                        applyUserPayload(data, {
-                            displayName: data.displayName,
-                            wnNumber: cleanWn
-                        });
-                        saveRememberedWn(cleanWn);
-                        showMessage('เข้าสู่ระบบสำรองสำเร็จ', 'success');
-                    } else {
-                        showMessage(data?.message || 'ไม่สามารถเข้าสู่ระบบด้วย WN Number ได้', 'error');
-                    }
-                } catch (error) {
-                    showMessage(`เข้าสู่ระบบสำรองไม่สำเร็จ: ${error.message}`, 'error');
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const linkBackupWn = async () => {
-                const cleanWn = (backupWnInput || '').trim().toUpperCase();
-                if (!cleanWn || !authSession?.userId) {
-                    showMessage('กรุณากรอก WN Number ให้ครบก่อนบันทึก', 'warning');
-                    return;
-                }
-
-                setLoading(true);
-
-                try {
-                    const data = await fetchWithRetry(buildApiUrl({
-                        action: 'linkBackupLogin',
-                        userId: authSession.userId,
-                        displayName: authSession.displayName,
-                        wnNumber: cleanWn
-                    }));
-
-                    if (data && data.status === 'success') {
-                        setBackupLinked(true);
-                        setLinkedWnNumber(cleanWn);
-                        saveRememberedWn(cleanWn);
-                        showMessage(data.message || 'ผูก WN Number สำเร็จ', 'success');
-                    } else {
-                        showMessage(data?.message || 'ผูก WN Number ไม่สำเร็จ', 'error');
-                    }
-                } catch (error) {
-                    showMessage(`ผูก WN Number ไม่สำเร็จ: ${error.message}`, 'error');
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const handleLineLogin = () => {
-                const currentUrl = window.location.origin + window.location.pathname;
-                liff.login({ redirectUri: currentUrl });
-            };
-
-            const initializeLiff = async () => {
-                const rememberedWn = getRememberedWn();
-                if (rememberedWn) {
-                    setFallbackWnInput(rememberedWn);
-                    setBackupWnInput(rememberedWn);
-                }
-
-                try {
-                    await liff.init({
-                        liffId: LIFF_ID,
-                        withLoginOnExternalBrowser: true
-                    });
-
-                    if (!liff.isInClient()) {
-                        await new Promise((resolve) => setTimeout(resolve, 100));
-                    }
-
-                    if (!liff.isLoggedIn()) {
-                        setNeedManualLogin(true);
-                        setLoading(false);
-                        return;
-                    }
-
-                    try {
-                        const userProfile = await liff.getProfile();
-                        if (!userProfile || !userProfile.userId) {
-                            throw new Error('LINE profile incomplete');
-                        }
-
-                        await fetchUserByLine(userProfile);
-                    } catch (profileError) {
-                        console.error('LINE profile error:', profileError);
-                        try {
-                            liff.logout();
-                        } catch (logoutError) {
-                            console.warn('Unable to logout LINE session', logoutError);
-                        }
-
-                        setNeedManualLogin(true);
-                        setLoading(false);
-                        showMessage('LINE ยืนยันตัวตนไม่สำเร็จ คุณสามารถใช้ WN Number เป็นทางสำรองได้', 'warning');
-                    }
-                } catch (error) {
-                    console.error('LIFF init error:', error);
-                    setNeedManualLogin(true);
-                    setLoading(false);
-                    showMessage('เชื่อมต่อ LINE ไม่สำเร็จ คุณยังเข้าใช้งานผ่าน WN Number ได้', 'warning');
-                }
-            };
-
-            const animateNewStamp = () => {
-                if (navigator.vibrate) {
-                    try {
-                        navigator.vibrate(100);
-                    } catch (error) {}
-                }
-
-                if (successSound.current) {
-                    successSound.current.currentTime = 0;
-                    successSound.current.play().catch(() => {});
-                }
-
-                setPoints((prev) => {
-                    const nextPoints = Math.min(prev + 1, TOTAL_STAMPS);
-                    setRecentStampIndex(nextPoints - 1);
-                    return nextPoints;
-                });
-            };
-
-            const handleClaimToken = async (tokenString) => {
-                const cleanToken = (tokenString || '').trim().toUpperCase();
-                if (!cleanToken || !authSession) return;
-
-                setLoading(true);
-
-                try {
-                    const data = await fetchWithRetry(buildApiUrl({
-                        action: 'addPoint',
-                        pin: cleanToken,
-                        userId: authSession.mode === 'line' ? authSession.userId : '',
-                        wnNumber: authSession.mode === 'wn' ? authSession.wnNumber : ''
-                    }), { method: 'GET' });
-
-                    if (data && data.status === 'success') {
-                        animateNewStamp();
-                        showMessage('สะสมแต้มสำเร็จ', 'success');
-                    } else {
-                        showMessage(data?.message || 'ไม่สามารถใช้รหัสนี้ได้', 'error');
-                    }
-                } catch (error) {
-                    showMessage('ระบบขัดข้อง กรุณาลองใหม่อีกครั้ง', 'error');
-                } finally {
-                    setLoading(false);
-                    setPinInput('');
-                }
-            };
-
-            const scanQRCode = () => {
-                if (!window.liff || !liff.scanCodeV2 || !liff.isInClient || !liff.isInClient()) {
-                    showMessage('โหมดสำรองไม่สามารถเปิดกล้อง LINE ได้ กรุณากรอกรหัสด้วยตนเอง', 'warning');
-                    return;
-                }
-
-                liff.scanCodeV2()
-                    .then((result) => {
-                        if (result && result.value) {
-                            handleClaimToken(result.value);
-                        }
-                    })
-                    .catch(() => showMessage('ไม่สามารถเปิดกล้องสแกนได้', 'error'));
-            };
-
-            React.useEffect(() => {
-                initializeLiff();
-            }, []);
-
-            if (loading && !authSession) {
-                return (
-                    <div className="flex flex-col items-center justify-center min-h-screen bg-pattern">
-                        <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
-                        <p className="text-white mt-4 font-semibold text-lg animate-pulse">กำลังโหลดข้อมูล...</p>
-                    </div>
-                );
-            }
-
-            if (needManualLogin && !authSession) {
-                return (
-                    <div className="min-h-screen bg-gray-100 px-5 py-8">
-                        <div className="max-w-md mx-auto space-y-5">
-                            <div className="bg-white p-8 rounded-3xl shadow-lg border-t-4 border-wurth-red text-center">
-                                <div className="bg-green-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                                    <i className="fab fa-line text-5xl text-green-500"></i>
-                                </div>
-                                <h1 className="text-2xl font-bold text-gray-800 mb-2">เข้าสู่ระบบ On Boarding</h1>
-                                <p className="text-gray-500 text-sm leading-6 mb-6">
-                                    ระบบจะพยายามใช้ LINE LIFF ก่อนตามปกติ
-                                    และถ้า LINE ดึง userId ไม่สำเร็จ คุณยังใช้ WN Number เพื่อกู้ข้อมูลเดิมกลับมาได้
-                                </p>
-                                <button
-                                    onClick={handleLineLogin}
-                                    className="w-full bg-[#06C755] hover:bg-green-600 text-white font-bold py-4 rounded-2xl transition-transform active:scale-95 shadow-md flex items-center justify-center"
-                                >
-                                    <i className="fab fa-line text-2xl mr-2"></i>
-                                    ล็อกอินด้วย LINE
-                                </button>
-                            </div>
-
-                            <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100">
-                                <div className="flex items-center mb-3">
-                                    <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center mr-3">
-                                        <i className="fas fa-shield-alt"></i>
-                                    </div>
-                                    <div>
-                                        <h2 className="font-bold text-gray-800">ล็อกอินสำรองด้วย WN Number</h2>
-                                        <p className="text-xs text-gray-500">ใช้เมื่อ LINE ยืนยันตัวตนไม่สำเร็จ</p>
-                                    </div>
-                                </div>
-
-                                <input
-                                    type="text"
-                                    value={fallbackWnInput}
-                                    onChange={(e) => setFallbackWnInput(e.target.value.toUpperCase())}
-                                    placeholder="เช่น WNN12345"
-                                    className="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-2xl focus:ring-wurth-red focus:border-wurth-red block p-4 shadow-sm uppercase"
-                                />
-
-                                <button
-                                    onClick={() => fetchUserByWn(fallbackWnInput)}
-                                    disabled={loading || !fallbackWnInput.trim()}
-                                    className="mt-4 w-full bg-wurth-red hover:bg-red-700 text-white font-bold py-4 rounded-2xl disabled:bg-gray-400 transition-transform active:scale-95"
-                                >
-                                    เข้าระบบด้วย WN Number
-                                </button>
-
-                                <p className="text-xs text-gray-500 mt-4 leading-5">
-                                    หมายเหตุ: WN Number จะใช้งานได้เมื่อบัญชีนี้เคยผูกกับ LINE สำเร็จแล้วอย่างน้อย 1 ครั้ง
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
-
-            return (
-                <div className="min-h-screen pb-10 flex flex-col bg-gray-100">
-                    <div className="bg-pattern pt-8 pb-16 px-4 rounded-b-[2.5rem] shadow-lg relative">
-                        <div className="flex items-center justify-between">
-                            <div className="bg-white p-2 rounded-xl shadow-sm">
-                                <img
-                                    src="https://www.wuerth.co.th/media/system/layout_wl2bootstrap/bootstrap_system_images/wuerth_logo_big.png"
-                                    alt="Wuerth Logo"
-                                    className="h-6 sm:h-8 w-auto"
-                                />
-                            </div>
-                            <h1 className="text-white text-xl font-bold tracking-wide text-right">
-                                ON BOARDING
-                                <br />
-                                <span className="text-gray-200 text-sm font-normal">PROGRAM</span>
-                            </h1>
-                        </div>
-
-                        <div className="absolute -bottom-14 left-0 right-0 px-6">
-                            <div className="bg-white rounded-2xl shadow-xl p-4 flex items-center space-x-4 border-t-4 border-wurth-red">
-                                <img
-                                    src={authSession?.pictureUrl || 'https://via.placeholder.com/150'}
-                                    alt="Profile"
-                                    className="w-16 h-16 rounded-full border-2 border-gray-100 shadow-sm object-cover"
-                                />
-                                <div className="min-w-0">
-                                    <h2 className="text-gray-800 font-bold text-lg truncate">{authSession?.displayName || 'User'}</h2>
-                                    <div className="flex items-center text-sm text-gray-500 mt-1">
-                                        <div className={`w-2 h-2 rounded-full mr-2 ${authSession?.mode === 'wn' ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
-                                        {authSession?.mode === 'wn'
-                                            ? `โหมดสำรองผ่าน ${authSession?.wnNumber || 'WN Number'}`
-                                            : 'เข้าสู่ระบบด้วย LINE'}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="mt-24 px-6 text-center">
-                        <h3 className="text-gray-600 font-medium">คะแนนสะสมของคุณ</h3>
-                        <div className="text-4xl font-bold wurth-red mt-1">
-                            {points} <span className="text-xl text-gray-400 font-normal">/ {TOTAL_STAMPS}</span>
-                        </div>
-                    </div>
-
-                    <div className="mx-4 mt-6 bg-white rounded-2xl shadow-md p-5 border border-gray-100">
-                        <div className="grid grid-cols-4 gap-4">
-                            {Array.from({ length: TOTAL_STAMPS }).map((_, i) => {
-                                const isEarned = i < points;
-                                const isRecent = i === recentStampIndex;
-
-                                return (
-                                    <div key={i} className="relative aspect-square flex items-center justify-center">
-                                        <div className={`absolute inset-0 rounded-full border-2 transition-colors duration-300 ${isEarned ? 'border-wurth-red bg-red-50' : 'border-gray-200 bg-gray-50'}`}></div>
-                                        {isEarned
-                                            ? <i className={`fas fa-star wurth-red text-2xl relative z-10 ${isRecent ? 'stamp-animate' : ''}`}></i>
-                                            : <span className="text-gray-300 font-semibold relative z-10">{i + 1}</span>}
-                                        {(!isEarned && (i === 10 || i === 11)) && <i className="fas fa-gift text-gray-300 text-2xl absolute opacity-30 z-0"></i>}
-                                    </div>
-                                );
-                            })}
-                        </div>
-
-                        {points >= TOTAL_STAMPS && (
-                            <div className="mt-6 p-3 bg-green-100 text-green-700 text-center rounded-lg font-bold animate-bounce">
-                                ยินดีด้วย คุณสะสมแต้มครบแล้ว
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="mx-4 mt-5 bg-white rounded-2xl shadow-md p-5 border border-gray-100">
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
-                                <h3 className="font-bold text-gray-800">ระบบล็อกอินสำรอง</h3>
-                                <p className="text-sm text-gray-500 mt-1 leading-5">
-                                    {authSession?.mode === 'line'
-                                        ? 'ผูก WN Number ไว้ล่วงหน้า เพื่อให้ดึงข้อมูลเดิมกลับมาได้ตอน LINE มีปัญหา'
-                                        : 'ตอนนี้คุณกำลังใช้งานผ่าน WN Number ระบบยังอิงข้อมูลเดิมจากชีตชุดเดิมเหมือนเดิม'}
-                                </p>
-                            </div>
-                            <div className={`px-3 py-1 rounded-full text-xs font-bold ${backupLinked ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                {backupLinked ? 'พร้อมใช้งาน' : 'ยังไม่ผูก'}
-                            </div>
-                        </div>
-
-                        {authSession?.mode === 'line' ? (
-                            <div className="mt-4">
-                                <div className="flex space-x-2">
-                                    <input
-                                        type="text"
-                                        value={backupWnInput}
-                                        onChange={(e) => setBackupWnInput(e.target.value.toUpperCase())}
-                                        placeholder="กรอก WN Number เช่น WNN12345"
-                                        className="flex-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-xl focus:ring-wurth-red focus:border-wurth-red block p-3 shadow-sm uppercase"
-                                    />
-                                    <button
-                                        onClick={linkBackupWn}
-                                        disabled={loading || !backupWnInput.trim()}
-                                        className="bg-gray-800 hover:bg-black text-white px-5 rounded-xl font-bold shadow-sm disabled:bg-gray-400 active:scale-95 transition-transform"
-                                    >
-                                        บันทึก
-                                    </button>
-                                </div>
-
-                                {backupLinked && linkedWnNumber && (
-                                    <p className="text-sm text-green-700 mt-3">ผูก WN Number แล้ว: {linkedWnNumber}</p>
-                                )}
-                            </div>
-                        ) : (
-                            <p className="mt-4 text-sm text-gray-700">
-                                WN Number ที่ใช้งานอยู่: <span className="font-bold">{authSession?.wnNumber || '-'}</span>
-                            </p>
-                        )}
-                    </div>
-
-                    <div className="mt-6 px-4 space-y-4 mb-8">
-                        <button
-                            onClick={scanQRCode}
-                            disabled={loading || points >= TOTAL_STAMPS}
-                            className={`w-full py-4 rounded-xl text-white font-bold shadow-lg flex items-center justify-center space-x-2 transition-transform active:scale-95 ${points >= TOTAL_STAMPS ? 'bg-gray-400' : 'bg-wurth-red hover:bg-red-700'}`}
-                        >
-                            <i className="fas fa-qrcode text-xl"></i>
-                            <span>{authSession?.mode === 'wn' ? 'สแกนด้วย LINE ไม่ได้ กรุณาใช้รหัสด้านล่าง' : 'สแกน QR Code รับแต้ม'}</span>
-                        </button>
-
-                        <div className="relative flex py-2 items-center">
-                            <div className="flex-grow border-t border-gray-300"></div>
-                            <span className="flex-shrink-0 mx-4 text-gray-400 text-sm">หรือกรอกรหัสด้วยตัวเอง</span>
-                            <div className="flex-grow border-t border-gray-300"></div>
-                        </div>
-
-                        <div className="flex space-x-2">
-                            <input
-                                type="text"
-                                value={pinInput}
-                                onChange={(e) => setPinInput(e.target.value.toUpperCase())}
-                                placeholder="กรอกรหัสสะสมแต้ม..."
-                                disabled={loading || points >= TOTAL_STAMPS}
-                                className="flex-1 bg-white border border-gray-300 text-gray-900 text-sm rounded-xl focus:ring-wurth-red focus:border-wurth-red block p-3 shadow-sm uppercase"
-                            />
-                            <button
-                                onClick={() => handleClaimToken(pinInput)}
-                                disabled={!pinInput || loading || points >= TOTAL_STAMPS}
-                                className="bg-gray-800 hover:bg-black text-white px-6 rounded-xl font-bold shadow-sm disabled:bg-gray-400 active:scale-95 transition-transform"
-                            >
-                                ยืนยัน
-                            </button>
-                        </div>
-                    </div>
-
-                    {message.show && (
-                        <div className="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 w-[90%] max-w-sm">
-                            <div className={`p-4 rounded-xl shadow-xl text-center text-white font-medium ${message.type === 'error' ? 'bg-red-600' : message.type === 'warning' ? 'bg-yellow-500' : 'bg-green-600'}`}>
-                                {message.text}
-                            </div>
-                        </div>
-                    )}
-
-                    {loading && authSession && (
-                        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 flex items-center justify-center">
-                            <div className="bg-white p-4 rounded-xl shadow-lg flex items-center space-x-3">
-                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-wurth-red"></div>
-                                <span className="font-medium text-gray-700">กำลังประมวลผล...</span>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
+  <div id="root"></div>
+  <script type="text/babel">
+    const GAS_URL = 'https://onboarding-stamps-api.wurthth1995.workers.dev/';
+    const LIFF_ID = '2009175418-UODHvYrB';
+    const TOTAL_STAMPS = 14;
+    const STORED_WN_KEY = 'onboarding.wnNumber';
+    const PENDING_LINE_WN_KEY = 'onboarding.pendingLineWn';
+
+    const App = () => {
+      const [loading, setLoading] = React.useState(true);
+      const [authSession, setAuthSession] = React.useState(null);
+      const [wnInput, setWnInput] = React.useState('');
+      const [pinInput, setPinInput] = React.useState('');
+      const [points, setPoints] = React.useState(0);
+      const [stampHistory, setStampHistory] = React.useState([]);
+      const [visitedDepartments, setVisitedDepartments] = React.useState([]);
+      const [remainingDepartments, setRemainingDepartments] = React.useState([]);
+      const [departmentProgress, setDepartmentProgress] = React.useState({ visited: 0, total: 0 });
+      const [recentStampIndex, setRecentStampIndex] = React.useState(-1);
+      const [lineStatus, setLineStatus] = React.useState('');
+      const [message, setMessage] = React.useState({ show: false, text: '', type: '' });
+      const toastTimerRef = React.useRef(null);
+      const successSound = React.useRef(typeof Audio !== 'undefined' ? new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3') : null);
+
+      const normalizeWn = (value) => (value || '').trim().toUpperCase();
+      const saveRememberedWn = (value) => { try { if (value) localStorage.setItem(STORED_WN_KEY, value); } catch (e) {} };
+      const getRememberedWn = () => { try { return (localStorage.getItem(STORED_WN_KEY) || '').trim().toUpperCase(); } catch (e) { return ''; } };
+      const clearRememberedWn = () => { try { localStorage.removeItem(STORED_WN_KEY); } catch (e) {} };
+      const savePendingLineWn = (value) => { try { localStorage.setItem(PENDING_LINE_WN_KEY, value); } catch (e) {} };
+      const getPendingLineWn = () => { try { return (localStorage.getItem(PENDING_LINE_WN_KEY) || '').trim().toUpperCase(); } catch (e) { return ''; } };
+      const clearPendingLineWn = () => { try { localStorage.removeItem(PENDING_LINE_WN_KEY); } catch (e) {} };
+
+      const showMessage = React.useCallback((text, type) => {
+        setMessage({ show: true, text, type });
+        if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = window.setTimeout(() => setMessage({ show: false, text: '', type: '' }), 3500);
+      }, []);
+
+      const fetchWithRetry = async (url, options = {}, retries = 2) => {
+        const fetchOptions = {
+          ...options,
+          redirect: 'follow',
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            ...(options.headers || {})
+          }
         };
+        for (let i = 0; i <= retries; i += 1) {
+          try {
+            const response = await fetch(url, fetchOptions);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return await response.json();
+          } catch (error) {
+            if (i === retries) throw error;
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+        }
+      };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+      const buildApiUrl = (params) => {
+        const url = new URL(GAS_URL);
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value);
+        });
+        url.searchParams.set('t', Date.now().toString());
+        return url.toString();
+      };
+
+      const applyUserPayload = (data, overrides = {}) => {
+        const session = {
+          mode: data.authMethod === 'line' ? 'line' : 'wn',
+          userId: data.userId || '',
+          accountId: data.accountId || '',
+          wnNumber: data.wnNumber || overrides.wnNumber || '',
+          displayName: data.displayName || overrides.displayName || data.wnNumber || 'User',
+          pictureUrl: overrides.pictureUrl || ''
+        };
+        setAuthSession(session);
+        setPoints(parseInt(data.points, 10) || 0);
+        setStampHistory(Array.isArray(data.stampHistory) ? data.stampHistory : []);
+        setVisitedDepartments(Array.isArray(data.visitedDepartments) ? data.visitedDepartments : []);
+        setRemainingDepartments(Array.isArray(data.remainingDepartments) ? data.remainingDepartments : []);
+        setDepartmentProgress(data.departmentProgress || { visited: 0, total: 0 });
+        setWnInput(session.wnNumber);
+        saveRememberedWn(session.wnNumber);
+      };
+
+      const requestUser = async ({ wnNumber, userId = '', displayName = '' }) => {
+        const data = await fetchWithRetry(buildApiUrl({ action: 'getUser', wnNumber, userId, displayName }));
+        if (!data || data.status !== 'success') throw new Error(data?.message || 'โหลดข้อมูลผู้ใช้ไม่สำเร็จ');
+        return data;
+      };
+
+      const celebrateStamp = (nextPoints) => {
+        if (navigator.vibrate) { try { navigator.vibrate(100); } catch (e) {} }
+        if (successSound.current) { successSound.current.currentTime = 0; successSound.current.play().catch(() => {}); }
+        setRecentStampIndex(Math.max(0, nextPoints - 1));
+      };
+
+      const startWithWnOnly = async () => {
+        const cleanWn = normalizeWn(wnInput);
+        if (!cleanWn) return showMessage('กรุณากรอก WN Number ก่อน', 'warning');
+        setLoading(true);
+        try {
+          const data = await requestUser({ wnNumber: cleanWn });
+          applyUserPayload(data, { wnNumber: cleanWn });
+          setLineStatus('');
+          showMessage('เข้าใช้งานด้วย WN Number สำเร็จ', 'success');
+        } catch (error) {
+          showMessage(error.message, 'error');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const startWithLine = async (resumeFromRedirect = false) => {
+        const cleanWn = normalizeWn(resumeFromRedirect ? getPendingLineWn() : wnInput);
+        if (!cleanWn) return showMessage('กรุณากรอก WN Number ก่อน', 'warning');
+        setLoading(true);
+        saveRememberedWn(cleanWn);
+        try {
+          if (!window.liff) throw new Error('LINE LIFF ยังไม่พร้อมใช้งาน');
+          await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: false });
+          if (!liff.isLoggedIn()) {
+            if (resumeFromRedirect) {
+              clearPendingLineWn();
+              setLineStatus('LINE ยังไม่ล็อกอินสำเร็จ คุณยังเข้าใช้งานด้วย WN ได้ทันที');
+              return;
+            }
+            savePendingLineWn(cleanWn);
+            liff.login({ redirectUri: window.location.origin + window.location.pathname });
+            return;
+          }
+          clearPendingLineWn();
+          const profile = await liff.getProfile();
+          if (!profile || !profile.userId) throw new Error('ไม่สามารถอ่าน LINE userId ได้');
+          const data = await requestUser({ wnNumber: cleanWn, userId: profile.userId, displayName: profile.displayName });
+          applyUserPayload(data, { wnNumber: cleanWn, displayName: profile.displayName, pictureUrl: profile.pictureUrl || '' });
+          setLineStatus('เชื่อม LINE สำเร็จ');
+          showMessage('เข้าสู่ระบบด้วย LINE สำเร็จ', 'success');
+        } catch (error) {
+          clearPendingLineWn();
+          setLineStatus('LINE มีปัญหาชั่วคราว แต่ระบบไม่บังคับวนลูปล็อกอิน คุณกดเข้าแบบ WN ได้เลย');
+          showMessage(error.message || 'เชื่อมต่อ LINE ไม่สำเร็จ', 'warning');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handleClaimToken = async (tokenString) => {
+        const cleanToken = (tokenString || '').trim().toUpperCase();
+        const cleanWn = normalizeWn(authSession?.wnNumber || wnInput);
+        if (!cleanToken || !cleanWn || !authSession) return;
+        setLoading(true);
+        try {
+          const data = await fetchWithRetry(buildApiUrl({
+            action: 'addPoint',
+            pin: cleanToken,
+            wnNumber: cleanWn,
+            userId: authSession.mode === 'line' ? authSession.userId : ''
+          }), { method: 'GET' });
+          if (data && data.status === 'success') {
+            applyUserPayload(data, { wnNumber: cleanWn, displayName: authSession.displayName, pictureUrl: authSession.pictureUrl || '' });
+            celebrateStamp(parseInt(data.points, 10) || 0);
+            showMessage('สะสมแต้มสำเร็จ', 'success');
+          } else {
+            showMessage(data?.message || 'ไม่สามารถใช้รหัสนี้ได้', 'error');
+          }
+        } catch (error) {
+          showMessage('ระบบขัดข้อง กรุณาลองใหม่อีกครั้ง', 'error');
+        } finally {
+          setLoading(false);
+          setPinInput('');
+        }
+      };
+
+      const scanQRCode = () => {
+        if (!authSession || authSession.mode !== 'line') return showMessage('การสแกน QR ผ่าน LINE ใช้ได้เฉพาะตอนเข้าแบบ LINE', 'warning');
+        if (!window.liff || !liff.scanCodeV2 || !liff.isInClient || !liff.isInClient()) return showMessage('อุปกรณ์นี้ไม่รองรับการสแกนผ่าน LINE', 'warning');
+        liff.scanCodeV2().then((result) => { if (result && result.value) handleClaimToken(result.value); }).catch(() => showMessage('ไม่สามารถเปิดกล้องสแกนได้', 'error'));
+      };
+
+      const switchAccount = () => {
+        clearPendingLineWn();
+        clearRememberedWn();
+        setAuthSession(null);
+        setWnInput('');
+        setPinInput('');
+        setPoints(0);
+        setStampHistory([]);
+        setVisitedDepartments([]);
+        setRemainingDepartments([]);
+        setDepartmentProgress({ visited: 0, total: 0 });
+        setRecentStampIndex(-1);
+        setLineStatus('');
+      };
+
+      React.useEffect(() => {
+        const rememberedWn = getRememberedWn();
+        if (rememberedWn) setWnInput(rememberedWn);
+        const pendingWn = getPendingLineWn();
+        if (pendingWn) {
+          setWnInput(pendingWn);
+          startWithLine(true);
+        } else {
+          setLoading(false);
+        }
+      }, []);
+
+      if (loading && !authSession) {
+        return <div className="flex flex-col items-center justify-center min-h-screen bg-pattern"><div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div><p className="text-white mt-4 font-semibold">กำลังเตรียมระบบ...</p></div>;
+      }
+
+      if (!authSession) {
+        return (
+          <div className="min-h-screen bg-gray-100 px-5 py-8">
+            <div className="max-w-md mx-auto space-y-4">
+              <div className="bg-white p-8 rounded-3xl shadow-lg border-t-4 border-wurth-red">
+                <div className="flex items-center justify-between mb-5">
+                  <img src="https://www.wuerth.co.th/media/system/layout_wl2bootstrap/bootstrap_system_images/wuerth_logo_big.png" alt="Wuerth Logo" className="h-8 w-auto" />
+                  <span className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full">WN FIRST</span>
+                </div>
+                <h1 className="text-2xl font-bold text-gray-800 mb-2">กรอก WN ก่อนทุกครั้ง</h1>
+                <p className="text-sm text-gray-500 leading-6 mb-4">ระบบจะผูกบัญชีจาก WN ตั้งแต่หน้าแรกทันที และถ้า LINE ใช้ไม่ได้ คุณยังสมัครและใช้งานต่อด้วย WN ได้เลย</p>
+                <input type="text" value={wnInput} onChange={(e) => setWnInput(e.target.value.toUpperCase())} placeholder="เช่น WNN12345" className="w-full bg-gray-50 border border-gray-300 rounded-2xl p-4 shadow-sm uppercase" />
+                <button onClick={() => startWithLine(false)} disabled={loading || !normalizeWn(wnInput)} className="mt-4 w-full bg-[#06C755] hover:bg-green-600 text-white font-bold py-4 rounded-2xl disabled:bg-gray-400"><i className="fab fa-line mr-2"></i>เข้าใช้งานด้วย LINE + WN</button>
+                <button onClick={startWithWnOnly} disabled={loading || !normalizeWn(wnInput)} className="mt-3 w-full bg-wurth-red hover:bg-red-700 text-white font-bold py-4 rounded-2xl disabled:bg-gray-400">ใช้งานด้วย WN Number เท่านั้น</button>
+                <p className="text-xs text-gray-500 mt-4 leading-5">ถ้า LINE ล้มเหลว ระบบจะไม่บังคับให้เด้งกลับไปล็อกอินซ้ำอัตโนมัติ คุณเลือกเข้าแบบ WN ต่อได้ทันที</p>
+              </div>
+              {lineStatus && <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-2xl p-4 text-sm">{lineStatus}</div>}
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen pb-10 flex flex-col bg-gray-100">
+          <div className="bg-pattern pt-8 pb-16 px-4 rounded-b-[2.5rem] shadow-lg relative">
+            <div className="flex items-center justify-between">
+              <div className="bg-white p-2 rounded-xl shadow-sm"><img src="https://www.wuerth.co.th/media/system/layout_wl2bootstrap/bootstrap_system_images/wuerth_logo_big.png" alt="Wuerth Logo" className="h-6 sm:h-8 w-auto" /></div>
+              <button onClick={switchAccount} className="bg-white/90 text-gray-700 text-sm font-semibold px-4 py-2 rounded-xl shadow-sm">เปลี่ยนบัญชี</button>
+            </div>
+            <div className="absolute -bottom-16 left-0 right-0 px-6">
+              <div className="bg-white rounded-2xl shadow-xl p-4 flex items-center space-x-4 border-t-4 border-wurth-red">
+                <img src={authSession.pictureUrl || 'https://via.placeholder.com/150'} alt="Profile" className="w-16 h-16 rounded-full border-2 border-gray-100 shadow-sm object-cover" />
+                <div className="min-w-0">
+                  <h2 className="text-gray-800 font-bold text-lg truncate">{authSession.displayName}</h2>
+                  <div className="text-sm text-gray-500">WN: {authSession.wnNumber}</div>
+                  <div className="text-sm text-gray-500 mt-1">{authSession.mode === 'line' ? 'เข้าแบบ LINE + WN' : 'เข้าแบบ WN Number'}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-24 px-6 text-center">
+            <h3 className="text-gray-600 font-medium">คะแนนสะสมของคุณ</h3>
+            <div className="text-4xl font-bold wurth-red mt-1">{points} <span className="text-xl text-gray-400 font-normal">/ {TOTAL_STAMPS}</span></div>
+          </div>
+
+          <div className="mx-4 mt-6 bg-white rounded-2xl shadow-md p-5 border border-gray-100">
+            <div className="grid grid-cols-4 gap-4">
+              {Array.from({ length: TOTAL_STAMPS }).map((_, i) => {
+                const isEarned = i < points;
+                const isRecent = i === recentStampIndex;
+                return <div key={i} className="relative aspect-square flex items-center justify-center"><div className={`absolute inset-0 rounded-full border-2 ${isEarned ? 'border-wurth-red bg-red-50' : 'border-gray-200 bg-gray-50'}`}></div>{isEarned ? <i className={`fas fa-star wurth-red text-2xl relative z-10 ${isRecent ? 'stamp-animate' : ''}`}></i> : <span className="text-gray-300 font-semibold relative z-10">{i + 1}</span>}</div>;
+              })}
+            </div>
+          </div>
+
+          <div className="mx-4 mt-5 bg-white rounded-2xl shadow-md p-5 border border-gray-100">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="font-bold text-gray-800">ประวัติแผนกที่เก็บ stamp แล้ว</h3>
+                <p className="text-sm text-gray-500 mt-1">ระบบแปลงจาก PIN ที่ใช้จริงในชีต Tokens เพื่อให้ดูง่าย</p>
+              </div>
+              <div className="bg-red-50 text-red-600 text-sm font-bold px-3 py-1 rounded-full">{departmentProgress.visited}/{departmentProgress.total || 0} แผนก</div>
+            </div>
+            <div className="grid grid-cols-3 gap-3 mt-4">
+              <div className="bg-gray-50 rounded-2xl p-3 text-center"><div className="text-xs text-gray-500">Stamp ทั้งหมด</div><div className="text-xl font-bold text-gray-800 mt-1">{stampHistory.length}</div></div>
+              <div className="bg-green-50 rounded-2xl p-3 text-center"><div className="text-xs text-green-700">ไปแล้ว</div><div className="text-xl font-bold text-green-700 mt-1">{visitedDepartments.length}</div></div>
+              <div className="bg-yellow-50 rounded-2xl p-3 text-center"><div className="text-xs text-yellow-700">ยังไม่ไป</div><div className="text-xl font-bold text-yellow-700 mt-1">{remainingDepartments.length}</div></div>
+            </div>
+            <div className="mt-5">
+              <div className="font-semibold text-gray-800 mb-2">แผนกที่ไปแล้ว</div>
+              {visitedDepartments.length ? <div className="flex flex-wrap gap-2">{visitedDepartments.map((item) => <span key={item} className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">{item}</span>)}</div> : <p className="text-sm text-gray-500">ยังไม่มีประวัติการเก็บ stamp</p>}
+            </div>
+            {!!remainingDepartments.length && <div className="mt-5"><div className="font-semibold text-gray-800 mb-2">แผนกที่ยังไม่เก็บ</div><div className="flex flex-wrap gap-2">{remainingDepartments.map((item) => <span key={item} className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-sm font-medium">{item}</span>)}</div></div>}
+            <div className="mt-5">
+              <div className="font-semibold text-gray-800 mb-2">ลำดับ stamp ล่าสุด</div>
+              {stampHistory.length ? <div className="space-y-2 max-h-64 overflow-y-auto">{[...stampHistory].reverse().map((item) => <div key={`${item.order}-${item.pin}`} className="flex items-center justify-between bg-gray-50 rounded-2xl px-4 py-3"><div><div className="font-semibold text-gray-800">{item.department}</div><div className="text-xs text-gray-500">PIN: {item.pin}</div></div><div className="text-sm font-bold text-red-600">#{item.order}</div></div>)}</div> : <p className="text-sm text-gray-500">เมื่อเริ่มสะสมแต้ม ประวัติจะแสดงตรงนี้ทันที</p>}
+            </div>
+          </div>
+
+          <div className="mx-4 mt-5 bg-white rounded-2xl shadow-md p-5 border border-gray-100">
+            <div className="font-bold text-gray-800">สถานะการเข้าใช้งาน</div>
+            <p className="text-sm text-gray-500 mt-1">{authSession.mode === 'line' ? 'บัญชีนี้ถูกผูกด้วย WN และ LINE เรียบร้อยแล้ว จึงใช้การสแกน QR ผ่าน LINE ได้' : 'บัญชีนี้ถูกสร้างจาก WN แล้ว แม้ LINE จะมีปัญหาก็ยังใช้งานต่อได้ตามปกติ'}</p>
+            {authSession.mode === 'wn' && <button onClick={() => startWithLine(false)} disabled={loading} className="mt-4 w-full bg-[#06C755] hover:bg-green-600 text-white font-bold py-4 rounded-2xl disabled:bg-gray-400">เชื่อม LINE เพิ่มภายหลัง</button>}
+          </div>
+
+          <div className="mt-6 px-4 space-y-4 mb-8">
+            <button onClick={scanQRCode} disabled={loading || points >= TOTAL_STAMPS} className={`w-full py-4 rounded-xl text-white font-bold shadow-lg flex items-center justify-center space-x-2 ${points >= TOTAL_STAMPS ? 'bg-gray-400' : 'bg-wurth-red hover:bg-red-700'}`}><i className="fas fa-qrcode text-xl"></i><span>{authSession.mode === 'line' ? 'สแกน QR Code รับแต้ม' : 'โหมด WN ใช้กรอกรหัสด้านล่างแทน'}</span></button>
+            <div className="relative flex py-2 items-center"><div className="flex-grow border-t border-gray-300"></div><span className="flex-shrink-0 mx-4 text-gray-400 text-sm">หรือกรอกรหัสด้วยตัวเอง</span><div className="flex-grow border-t border-gray-300"></div></div>
+            <div className="flex space-x-2">
+              <input type="text" value={pinInput} onChange={(e) => setPinInput(e.target.value.toUpperCase())} placeholder="กรอกรหัสสะสมแต้ม..." disabled={loading || points >= TOTAL_STAMPS} className="flex-1 bg-white border border-gray-300 text-sm rounded-xl p-3 shadow-sm uppercase" />
+              <button onClick={() => handleClaimToken(pinInput)} disabled={!pinInput || loading || points >= TOTAL_STAMPS} className="bg-gray-800 hover:bg-black text-white px-6 rounded-xl font-bold disabled:bg-gray-400">ยืนยัน</button>
+            </div>
+          </div>
+
+          {message.show && <div className="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 w-[90%] max-w-sm"><div className={`p-4 rounded-xl shadow-xl text-center text-white font-medium ${message.type === 'error' ? 'bg-red-600' : message.type === 'warning' ? 'bg-yellow-500' : 'bg-green-600'}`}>{message.text}</div></div>}
+          {loading && authSession && <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 flex items-center justify-center"><div className="bg-white p-4 rounded-xl shadow-lg flex items-center space-x-3"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-wurth-red"></div><span className="font-medium text-gray-700">กำลังประมวลผล...</span></div></div>}
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
 </body>
 </html>
