@@ -46,11 +46,17 @@
       const [departmentProgress, setDepartmentProgress] = React.useState({ visited: 0, total: 0 });
       const [recentStampIndex, setRecentStampIndex] = React.useState(-1);
       const [lineStatus, setLineStatus] = React.useState('');
+      const [showGuide, setShowGuide] = React.useState(false);
       const [message, setMessage] = React.useState({ show: false, text: '', type: '' });
       const toastTimerRef = React.useRef(null);
       const successSound = React.useRef(typeof Audio !== 'undefined' ? new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3') : null);
 
       const normalizeWn = (value) => (value || '').trim().toUpperCase();
+      const maskPin = (value) => {
+        const text = String(value || '');
+        if (text.length <= 4) return '****';
+        return `${text.slice(0, -4)}****`;
+      };
       const saveRememberedWn = (value) => { try { if (value) localStorage.setItem(STORED_WN_KEY, value); } catch (e) {} };
       const getRememberedWn = () => { try { return (localStorage.getItem(STORED_WN_KEY) || '').trim().toUpperCase(); } catch (e) { return ''; } };
       const clearRememberedWn = () => { try { localStorage.removeItem(STORED_WN_KEY); } catch (e) {} };
@@ -155,7 +161,7 @@
           if (!liff.isLoggedIn()) {
             if (resumeFromRedirect) {
               clearPendingLineWn();
-              setLineStatus('LINE ยังไม่ล็อกอินสำเร็จ คุณยังเข้าใช้งานด้วย WN ได้ทันที');
+              setLineStatus('ไม่สามารถเข้าสู่ระบบด้วย LINE ได้ในขณะนี้');
               return;
             }
             savePendingLineWn(cleanWn);
@@ -167,11 +173,11 @@
           if (!profile || !profile.userId) throw new Error('ไม่สามารถอ่าน LINE userId ได้');
           const data = await requestUser({ wnNumber: cleanWn, userId: profile.userId, displayName: profile.displayName });
           applyUserPayload(data, { wnNumber: cleanWn, displayName: profile.displayName, pictureUrl: profile.pictureUrl || '' });
-          setLineStatus('เชื่อม LINE สำเร็จ');
+          setLineStatus('เชื่อมต่อบัญชี LINE สำเร็จ');
           showMessage('เข้าสู่ระบบด้วย LINE สำเร็จ', 'success');
         } catch (error) {
           clearPendingLineWn();
-          setLineStatus('LINE มีปัญหาชั่วคราว แต่ระบบไม่บังคับวนลูปล็อกอิน คุณกดเข้าแบบ WN ได้เลย');
+          setLineStatus('ไม่สามารถเข้าสู่ระบบด้วย LINE ได้ในขณะนี้');
           showMessage(error.message || 'เชื่อมต่อ LINE ไม่สำเร็จ', 'warning');
         } finally {
           setLoading(false);
@@ -249,17 +255,17 @@
               <div className="bg-white p-8 rounded-3xl shadow-lg border-t-4 border-wurth-red">
                 <div className="flex items-center justify-between mb-5">
                   <img src="https://www.wuerth.co.th/media/system/layout_wl2bootstrap/bootstrap_system_images/wuerth_logo_big.png" alt="Wuerth Logo" className="h-8 w-auto" />
-                  <span className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full">WN FIRST</span>
+                  <button onClick={() => setShowGuide(true)} className="text-xs font-semibold text-gray-600 bg-gray-100 px-3 py-1 rounded-full">คู่มือการใช้งาน</button>
                 </div>
                 <h1 className="text-2xl font-bold text-gray-800 mb-2">กรอก WN ก่อนทุกครั้ง</h1>
-                <p className="text-sm text-gray-500 leading-6 mb-4">ระบบจะผูกบัญชีจาก WN ตั้งแต่หน้าแรกทันที และถ้า LINE ใช้ไม่ได้ คุณยังสมัครและใช้งานต่อด้วย WN ได้เลย</p>
+                <p className="text-sm text-gray-500 leading-6 mb-4">กรุณากรอก WN Number เพื่อเข้าสู่ระบบ</p>
                 <input type="text" value={wnInput} onChange={(e) => setWnInput(e.target.value.toUpperCase())} placeholder="เช่น WNN12345" className="w-full bg-gray-50 border border-gray-300 rounded-2xl p-4 shadow-sm uppercase" />
                 <button onClick={() => startWithLine(false)} disabled={loading || !normalizeWn(wnInput)} className="mt-4 w-full bg-[#06C755] hover:bg-green-600 text-white font-bold py-4 rounded-2xl disabled:bg-gray-400"><i className="fab fa-line mr-2"></i>เข้าใช้งานด้วย LINE + WN</button>
-                <button onClick={startWithWnOnly} disabled={loading || !normalizeWn(wnInput)} className="mt-3 w-full bg-wurth-red hover:bg-red-700 text-white font-bold py-4 rounded-2xl disabled:bg-gray-400">ใช้งานด้วย WN Number เท่านั้น</button>
-                <p className="text-xs text-gray-500 mt-4 leading-5">ถ้า LINE ล้มเหลว ระบบจะไม่บังคับให้เด้งกลับไปล็อกอินซ้ำอัตโนมัติ คุณเลือกเข้าแบบ WN ต่อได้ทันที</p>
+                <button onClick={startWithWnOnly} disabled={loading || !normalizeWn(wnInput)} className="mt-3 w-full bg-wurth-red hover:bg-red-700 text-white font-bold py-4 rounded-2xl disabled:bg-gray-400">ใช้งานด้วย WN Number</button>
               </div>
               {lineStatus && <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-2xl p-4 text-sm">{lineStatus}</div>}
             </div>
+            {showGuide && <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"><div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 max-h-[85vh] overflow-y-auto"><div className="flex items-center justify-between mb-5"><h3 className="text-xl font-bold text-gray-800">คู่มือการใช้งาน</h3><button onClick={() => setShowGuide(false)} className="w-9 h-9 rounded-full bg-gray-100 text-gray-600 font-bold">x</button></div><div className="space-y-4"><div className="bg-gray-50 rounded-2xl p-4"><div className="text-xs font-semibold text-red-600 mb-1">STEP 1</div><div className="font-semibold text-gray-800">กรอก WN Number</div><div className="text-sm text-gray-600 mt-1">กรอก WN Number ในช่องด้านหน้าให้ครบก่อนเริ่มใช้งาน</div></div><div className="bg-gray-50 rounded-2xl p-4"><div className="text-xs font-semibold text-red-600 mb-1">STEP 2</div><div className="font-semibold text-gray-800">เลือกวิธีเข้าสู่ระบบ</div><div className="text-sm text-gray-600 mt-1">กดปุ่มเข้าสู่ระบบด้วย LINE + WN หากต้องการใช้งานร่วมกับ LINE หรือกดใช้งานด้วย WN Number เท่านั้น หากต้องการเข้าใช้งานทันที</div></div><div className="bg-gray-50 rounded-2xl p-4"><div className="text-xs font-semibold text-red-600 mb-1">STEP 3</div><div className="font-semibold text-gray-800">กรณีเข้าสู่ระบบด้วย LINE ไม่ได้</div><div className="text-sm text-gray-600 mt-1">ให้กรอก WN Number และกดใช้งานด้วย WN Number เท่านั้น</div></div><div className="bg-gray-50 rounded-2xl p-4"><div className="text-xs font-semibold text-red-600 mb-1">STEP 4</div><div className="font-semibold text-gray-800">การสแกนคิวอาร์โค้ด</div><div className="text-sm text-gray-600 mt-1">หากต้องการใช้ระบบสแกนคิวอาร์โค้ด กรุณาล็อกอินด้วยระบบ LINE</div></div><div className="bg-gray-50 rounded-2xl p-4"><div className="text-xs font-semibold text-red-600 mb-1">STEP 5</div><div className="font-semibold text-gray-800">การตรวจสอบประวัติ</div><div className="text-sm text-gray-600 mt-1">หลังเข้าสู่ระบบ ระบบจะแสดงแผนกที่เก็บ stamp แล้ว แผนกที่ยังไม่เก็บ และประวัติรายการล่าสุด</div></div></div></div></div>}
           </div>
         );
       }
@@ -277,7 +283,7 @@
                 <div className="min-w-0">
                   <h2 className="text-gray-800 font-bold text-lg truncate">{authSession.displayName}</h2>
                   <div className="text-sm text-gray-500">WN: {authSession.wnNumber}</div>
-                  <div className="text-sm text-gray-500 mt-1">{authSession.mode === 'line' ? 'เข้าแบบ LINE + WN' : 'เข้าแบบ WN Number'}</div>
+                  <div className="text-sm text-gray-500 mt-1">{authSession.mode === 'line' ? 'เข้าสู่ระบบด้วย LINE' : 'เข้าสู่ระบบด้วย WN Number'}</div>
                 </div>
               </div>
             </div>
@@ -318,14 +324,14 @@
             {!!remainingDepartments.length && <div className="mt-5"><div className="font-semibold text-gray-800 mb-2">แผนกที่ยังไม่เก็บ</div><div className="flex flex-wrap gap-2">{remainingDepartments.map((item) => <span key={item} className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-sm font-medium">{item}</span>)}</div></div>}
             <div className="mt-5">
               <div className="font-semibold text-gray-800 mb-2">ลำดับ stamp ล่าสุด</div>
-              {stampHistory.length ? <div className="space-y-2 max-h-64 overflow-y-auto">{[...stampHistory].reverse().map((item) => <div key={`${item.order}-${item.pin}`} className="flex items-center justify-between bg-gray-50 rounded-2xl px-4 py-3"><div><div className="font-semibold text-gray-800">{item.department}</div><div className="text-xs text-gray-500">PIN: {item.pin}</div></div><div className="text-sm font-bold text-red-600">#{item.order}</div></div>)}</div> : <p className="text-sm text-gray-500">เมื่อเริ่มสะสมแต้ม ประวัติจะแสดงตรงนี้ทันที</p>}
+              {stampHistory.length ? <div className="space-y-2 max-h-64 overflow-y-auto">{[...stampHistory].reverse().map((item) => <div key={`${item.order}-${item.pin}`} className="flex items-center justify-between bg-gray-50 rounded-2xl px-4 py-3"><div><div className="font-semibold text-gray-800">{item.department}</div><div className="text-xs text-gray-500">PIN: {maskPin(item.pin)}</div></div><div className="text-sm font-bold text-red-600">#{item.order}</div></div>)}</div> : <p className="text-sm text-gray-500">เมื่อเริ่มสะสมแต้ม ประวัติจะแสดงตรงนี้ทันที</p>}
             </div>
           </div>
 
           <div className="mx-4 mt-5 bg-white rounded-2xl shadow-md p-5 border border-gray-100">
             <div className="font-bold text-gray-800">สถานะการเข้าใช้งาน</div>
-            <p className="text-sm text-gray-500 mt-1">{authSession.mode === 'line' ? 'บัญชีนี้ถูกผูกด้วย WN และ LINE เรียบร้อยแล้ว จึงใช้การสแกน QR ผ่าน LINE ได้' : 'บัญชีนี้ถูกสร้างจาก WN แล้ว แม้ LINE จะมีปัญหาก็ยังใช้งานต่อได้ตามปกติ'}</p>
-            {authSession.mode === 'wn' && <button onClick={() => startWithLine(false)} disabled={loading} className="mt-4 w-full bg-[#06C755] hover:bg-green-600 text-white font-bold py-4 rounded-2xl disabled:bg-gray-400">เชื่อม LINE เพิ่มภายหลัง</button>}
+            <p className="text-sm text-gray-500 mt-1">{authSession.mode === 'line' ? 'เปิดใช้งานระบบสแกนคิวอาร์โค้ดแล้ว' : 'หากต้องการใช้ ระบบสแกนคิวอาร์โค้ด กรุณาล็อคอินด้วยระบบ LINE'}</p>
+            {authSession.mode === 'wn' && <button onClick={() => startWithLine(false)} disabled={loading} className="mt-4 w-full bg-[#06C755] hover:bg-green-600 text-white font-bold py-4 rounded-2xl disabled:bg-gray-400">เชื่อมต่อกับ LINE</button>}
           </div>
 
           <div className="mt-6 px-4 space-y-4 mb-8">
