@@ -321,16 +321,16 @@
             </div>
             <div className="grid grid-cols-3 gap-3 mt-4">
               <div className="bg-gray-50 rounded-2xl p-3 text-center"><div className="text-xs text-gray-500">Stamp ทั้งหมด</div><div className="text-xl font-bold text-gray-800 mt-1">{stampHistory.length}</div></div>
-              <div className="bg-green-50 rounded-2xl p-3 text-center"><div className="text-xs text-green-700">ไปแล้ว</div><div className="text-xl font-bold text-green-700 mt-1">{visitedDepartments.length}</div></div>
-              <div className="bg-yellow-50 rounded-2xl p-3 text-center"><div className="text-xs text-yellow-700">ยังไม่ไป</div><div className="text-xl font-bold text-yellow-700 mt-1">{remainingDepartments.length}</div></div>
+              <div className="bg-green-50 rounded-2xl p-3 text-center"><div className="text-xs text-green-700">ผ่านแล้ว</div><div className="text-xl font-bold text-green-700 mt-1">{visitedDepartments.length}</div></div>
+              <div className="bg-yellow-50 rounded-2xl p-3 text-center"><div className="text-xs text-yellow-700">ยังไม่ผ่าน</div><div className="text-xl font-bold text-yellow-700 mt-1">{remainingDepartments.length}</div></div>
             </div>
             <div className="mt-5">
-              <div className="font-semibold text-gray-800 mb-2">แผนกที่ไปแล้ว</div>
+              <div className="font-semibold text-gray-800 mb-2">แผนกที่เก็บแต้มแล้ว</div>
               {visitedDepartments.length ? <div className="flex flex-wrap gap-2">{visitedDepartments.map((item) => <span key={item} className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">{item}</span>)}</div> : <p className="text-sm text-gray-500">ยังไม่มีประวัติการเก็บ stamp</p>}
             </div>
-            {!!remainingDepartments.length && <div className="mt-5"><div className="font-semibold text-gray-800 mb-2">แผนกที่ยังไม่เก็บ</div><div className="flex flex-wrap gap-2">{remainingDepartments.map((item) => <span key={item} className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-sm font-medium">{item}</span>)}</div></div>}
+            {!!remainingDepartments.length && <div className="mt-5"><div className="font-semibold text-gray-800 mb-2">แผนกที่ยังไม่เก็บแต้ม</div><div className="flex flex-wrap gap-2">{remainingDepartments.map((item) => <span key={item} className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-sm font-medium">{item}</span>)}</div></div>}
             <div className="mt-5">
-              <div className="font-semibold text-gray-800 mb-2">ลำดับ stamp ล่าสุด</div>
+              <div className="font-semibold text-gray-800 mb-2">ลำดับ Stamps ล่าสุด</div>
               {stampHistory.length ? <div className="space-y-2 max-h-64 overflow-y-auto">{[...stampHistory].reverse().map((item) => <div key={`${item.order}-${item.pin}`} className="flex items-center justify-between bg-gray-50 rounded-2xl px-4 py-3"><div><div className="font-semibold text-gray-800">{item.department}</div><div className="text-xs text-gray-500">PIN: {maskPin(item.pin)}</div></div><div className="text-sm font-bold text-red-600">#{item.order}</div></div>)}</div> : <p className="text-sm text-gray-500">เมื่อเริ่มสะสมแต้ม ประวัติจะแสดงตรงนี้ทันที</p>}
             </div>
           </div>
